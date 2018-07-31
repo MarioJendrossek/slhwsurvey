@@ -33,16 +33,13 @@
       hcw.data$ethnic_gp <- as.numeric(as.character(hcw.data$ethnic_gp))
       hcw.data$full_time <- as.numeric(as.character(hcw.data$full_time))
       hcw.data$payroll <- as.numeric(as.character(hcw.data$payroll))
-      
       hcw.data$profession <- as.numeric(as.character(hcw.data$profession))
       hcw.data$profession_group <- as.numeric(as.character(hcw.data$profession_group))
-  
       hcw.data$profession_other <- as.character(hcw.data$profession_other)
       hcw.data$rel <- as.numeric(as.character(hcw.data$rel))
       hcw.data$stay_6mo <- as.numeric(as.character(hcw.data$stay_6mo))
       hcw.data$stay_24mo <- as.numeric(as.character(hcw.data$stay_24mo))
       hcw.data$other_hc_yn <- as.numeric(as.character(hcw.data$other_hc_yn))
-      
       hcw.data$other_hc <- as.character(as.character(hcw.data$other_hc))
       hcw.data$health_ctr_type_2 <- as.numeric(as.character(hcw.data$health_ctr_type_2))
       hcw.data$num_hc <- as.numeric(as.character(hcw.data$num_hc))
@@ -72,7 +69,7 @@
         hcw.data$health_ctr_name[hcw.data$health_ctr_name=="good grace clinic" | hcw.data$health_ctr_name=="good grace private clinic"] <- "good grace hospital"
         hcw.data$health_ctr_name[hcw.data$health_ctr_name=="grey bush" | hcw.data$health_ctr_name== "grey bush health center"] <- "grey bush chc"
         hcw.data$health_ctr_name[hcw.data$health_ctr_name=="kambia referral hospital"] <- "kambia district hospital"
-        hcw.data$health_ctr_name[hcw.data$health_ctr_name=="king hermma" | hcw.data$health_ctr_name==".king hermma hospital"] <- "king hermma hospital"
+        hcw.data$health_ctr_name[hcw.data$health_ctr_name=="king hermma" | hcw.data$health_ctr_name==".king hermma hospital" | hcw.data$health_ctr_name=="king herrma hospital" ] <- "king hermma hospital"
         hcw.data$health_ctr_name[hcw.data$health_ctr_name=="kroobay health center"] <- "kroobay chc"
         hcw.data$health_ctr_name[hcw.data$health_ctr_name=="mariana mchp"] <- "mariama mchp"
         hcw.data$health_ctr_name[hcw.data$health_ctr_name=="murray town health center" | hcw.data$health_ctr_name=="murray town health centrer"] <- "murray town chc"
@@ -94,8 +91,8 @@
       # kroobay chc
       hcw.data$health_ctr_type[hcw.data$health_ctr_name=="kroobay chc"] <- "5"
      
-     # other errors
-     #####
+       # other errors
+       #####
   
     # remove99/88-> NAs
     hcw.data$age_gp[hcw.data$age_gp==99 | hcw.data$age_gp==88] <- NA
@@ -138,7 +135,7 @@
        hcw.data$duration_hcw <- NA
        for (i in 1:length(hcw.data$district)) {
          if(hcw.data$age_jobstart[i]==2) {
-           hcw.data$duration_job[i] <- (as.Date(as.character("01/07/2018"), format="%d/%m/%Y")-
+           hcw.data$duration_job[i] <- (as.Date(as.character("08/07/2018"), format="%d/%m/%Y")-
              as.Date(as.character(hcw.data$start_job[i]), format="%d.%m.%Y"))/365.25
          }
          else if (hcw.data$age_jobstart[i]==1) {
@@ -152,7 +149,7 @@
       ### duration.hcw (difference between 1.7.2018 and start of job)
        for (i in 1:length(hcw.data$district)) {
          if(hcw.data$age_hcwstart[i]==2) {
-           hcw.data$duration_hcw[i] <- (as.Date(as.character("01/07/2018"), format="%d/%m/%Y")-
+           hcw.data$duration_hcw[i] <- (as.Date(as.character("08/07/2018"), format="%d/%m/%Y")-
                                           as.Date(as.character(hcw.data$start_hcw[i]), format="%d.%m.%Y"))/365.25
          }
          else if (hcw.data$age_hcwstart[i]==1) {
@@ -165,14 +162,17 @@
        
        # compare duration hcw and job (job should not be longer than hcw!)
        hcw.data$duration_hcw-hcw.data$duration_job
-        sum(hcw.data$duration_hcw-hcw.data$duration_job>0,na.rm=T)
-        sum(hcw.data$duration_hcw-hcw.data$duration_job< (-1),na.rm=T)
-        
-      # +++++++where more than -1: NA??  DECISION FOR ROZ TO TAK: ~200 longer HCW, ca 40 longer job than HCW (20 more than 1 year difference (maybe understood job as payroll?)) ca 50 first job
-     
+        sum(hcw.data$duration_hcw-hcw.data$duration_job<0,na.rm=T)
+        # replace duration_job by duration hcw if duration job > duration_hcw
+        for (i in 1:length(hcw.data$district)) {
+          if(!is.na(hcw.data$duration_hcw[i])& !is.na(hcw.data$duration_job[i])){         
+            if(hcw.data$duration_job[i]>hcw.data$duration_hcw[i]) {
+            hcw.data$duration_job[i] <- hcw.data$duration_hcw[i]
+            }
+          }
+        }
  
     # 3. use info from profession other field
-  
       hcw.data$profession[hcw.data$profession_other=="sechn nurse" | hcw.data$profession_other=="sechn" | hcw.data$profession_other=="staff nurse" | hcw.data$profession_other=="srn nurse" | hcw.data$profession_other=="nursing officer" | hcw.data$profession_other=="bsc in nursing"] <- 2
       hcw.data$profession[hcw.data$profession_other=="anesthesias"] <- 1
       hcw.data$profession[hcw.data$profession_other=="maintance"] <- 15
@@ -182,28 +182,6 @@
       hcw.data$profession[hcw.data$profession_other=="cold room"] <- 15
     
   
-  #   for (i in 1:length(hcw.data$district)) {
-  #     other <- hcw.data$profession_other[i]
-  #     if(hcw.data$profession[i]=="other") {
-  #       hcw.data$profession[i] <- other
-  #     }
-  #   }
-  #  
-    
-    # check coherence of 2 profession vars (tab prof group and profession against each other?)
-    table(hcw.data$profession, hcw.data$profession_group)
-  
-    # 4. use info from hlth-ctr-other field (and of health centre type other)
-     ###
-   #  for (i in 1:length(hcw.data$district)) {
-   #    other <- hcw.data$health_ctr_type_other[i]
-   #   if(hcw.data$health_ctr_type[i]=="other") {
-   #      hcw.data$health_ctr_type[i] <- other
-   #     }
-   #   }
- 
-     # check that there are no others that can be regrouped
-     table(hcw.data$health_ctr_type)
 
      # 5. info from 2 scenario Qs to construct vacc_opinion
        hcw.data$vacc_op <- NA
@@ -249,29 +227,31 @@
          }
        }
  
+       
      # 6.+++++++ check income (if unrealistic take out 0: typing error) => change Q to be range of income 0-500,000 500-1M, 1-2M 2-5M Over 5M
      # make use only of info up to 1,5M Leones (9 over 10M---typing errors probably)
   
     #use info from 2 info fields for income (assume same income for partner? or make quantile for each value?)
        hcw.data$hh_income <- NA
-  for (i in 1:length(hcw.data$district)) {
+        for (i in 1:length(hcw.data$district)) {
          income <- hcw.data$ind_income[i]
-         if(is.na(income)) {
-           income <- 0
-         }
+           if(is.na(income)) {
+             income <- 0
+           }
          income_2 <- income*2
-         if(hcw.data$hh_income_0[i]==99) {
-           if(income!=99) {
-           hcw.data$hh_income[i] <- income_2
-         } else {
-           hcw.data$hh_income[i] <- NA
-         }
-       }
-       else {hcw.data$hh_income[i] <- hcw.data$hh_income_0[i]}
+           if(hcw.data$hh_income_0[i]==99) {
+             if(income!=99) {
+             hcw.data$hh_income[i] <- income_2
+           } else {
+             hcw.data$hh_income[i] <- NA
+           }
+          }
+        else {hcw.data$hh_income[i] <- hcw.data$hh_income_0[i]
+        }
      }
      
     
-    # 7. create SES score variable (tv, radio, education, income) +++++TAKE INTO ACC HH SIZE++++
+    # 7. create SES score variable (tv, radio, education, income)
       hcw.data$ses_score <- 0
       
       # add 1 if hcw has radio at home
@@ -280,7 +260,6 @@
           hcw.data$ses_score[i] <- hcw.data$ses_score[i] + 1
         }
       }
-      
       # add 2 if hcw has tv at home
       for (i in 1:length(hcw.data$district)) {
         if(hcw.data$hh_tv[i]==1) {
@@ -288,71 +267,43 @@
         }
       }
       
-      # add 3 if hcw attended university
-      for (i in 1:length(hcw.data$district)) {
-        if(hcw.data$edu[i]==6) {
-          hcw.data$ses_score[i] <- hcw.data$ses_score[i] + 3
-        }
-      }
-      
-      # add 1 if completed secondary school
-      for (i in 1:length(hcw.data$district)) {
-        if(hcw.data$edu[i]==5) {
-          hcw.data$ses_score[i] <- hcw.data$ses_score[i] + 1
-        }
-      }
       # add 1 if hh income between 500000 and 1 000 000 SLL per month
       for (i in 1:length(hcw.data$district)) {
-        if(!is.na(hcw.data$hh_income[i]))  {
-        if(hcw.data$hh_income[i]>499999 & hcw.data$hh_income[i]<1000000) {
+        if(!is.na(hcw.data$hh_income[i])) {
+        if(hcw.data$hh_income[i]>599999 & hcw.data$hh_income[i]<1100000) {
           hcw.data$ses_score[i] <- hcw.data$ses_score[i] + 1
         }
         }
       }
-      # add 2 if hh income between 1000000 and 1 500 000 SLL per month
-      for (i in 1:length(hcw.data$district)) {
-        if(!is.na(hcw.data$hh_income[i])) {
-        if(hcw.data$hh_income[i]>999999 & hcw.data$hh_income[i]<1500000) {
-          hcw.data$ses_score[i] <- hcw.data$ses_score[i] + 2
-        }
-        }
-      }
-      # add 3 if income over 1 500 000 SLL per month
+      # add 3 if income over 1 000 000 SLL per month
       for (i in 1:length(hcw.data$district)) {
         if(!is.na(hcw.data$hh_income[i])){
-        if(hcw.data$hh_income[i]>=1500000) {
+        if(hcw.data$hh_income[i]>=1100000) {
           hcw.data$ses_score[i] <- hcw.data$ses_score[i] + 3
         }
-        }
-      }
-      # make -1 if more than 10 people in hh? (TALK TO ROOOOZ!!!)
-      for (i in 1:length(hcw.data$district)) {
-        if(hcw.data$hh_num[i]>10) {
-          hcw.data$ses_score[i] <- hcw.data$ses_score[i] - 1
         }
       }
 
+
     # sesscore groups
     hcw.data$ses_gp <- NA
-    hcw.data$ses_gp[hcw.data$ses_score<=3] <- 1
-    hcw.data$ses_gp[hcw.data$ses_score==4 | hcw.data$ses_score==5] <- 2
-    hcw.data$ses_gp[hcw.data$ses_score>5] <- 3
-  
-  
+    hcw.data$ses_gp[hcw.data$ses_score<3] <- 1
+    hcw.data$ses_gp[hcw.data$ses_score==3 | hcw.data$ses_score==4] <- 2
+    hcw.data$ses_gp[hcw.data$ses_score>4] <- 3
   
   
   
     # 9. 2 & 3 is not full time for full_time    
-        hcw.data$full_time[hcw.data$full_time==3] <- 2
+    hcw.data$full_time[hcw.data$full_time==3] <- 2
   
     # 10. income group var
-    hcw.data$income_gp[hcw.data$hh_income<500000] <- 1
-    hcw.data$income_gp[hcw.data$hh_income>499999 & hcw.data$hh_income<1000000] <- 2
-    hcw.data$income_gp[hcw.data$hh_income>999999 & hcw.data$hh_income<1500000] <- 3
-    hcw.data$income_gp[hcw.data$hh_income>1499999] <- 4
+    quantile(hcw.data$hh_income, 0.3333, na.rm=T)
+    quantile(hcw.data$hh_income, 0.6666, na.rm=T)
+    hcw.data$income_gp[hcw.data$hh_income<600000] <- 1
+    hcw.data$income_gp[hcw.data$hh_income>599999 & hcw.data$hh_income<1100000] <- 2
+    hcw.data$income_gp[hcw.data$hh_income>1099999] <- 3
     
     # 11. edu grouped
-  
     hcw.data$edu_gp <- NA
     hcw.data$edu_gp[hcw.data$edu %in% c(1,2,3,4)] <-1
     hcw.data$edu_gp[hcw.data$edu %in% c(5)] <-2
@@ -361,13 +312,55 @@
     # 12. age gped
     hcw.data$age_gp[hcw.data$age_gp==6] <- 5
   
+    
+    # 13. profession vars
+    # regroup a bit
+    hcw.data$profession[hcw.data$profession %in% c(15)] <- 12
+    hcw.data$profession[hcw.data$profession %in% c(4)] <- 10
+    
+    # create other prof group var
+    hcw.data$prof_gp <- NA 
+    hcw.data$prof_gp[hcw.data$profession=="1"] <- 1
+      hcw.data$prof_gp[hcw.data$profession=="2"] <-1 
+      hcw.data$prof_gp[hcw.data$profession=="3"] <- 1
+      hcw.data$prof_gp[hcw.data$profession=="6"] <- 4
+      hcw.data$prof_gp[hcw.data$profession=="8"] <- 4
+      hcw.data$prof_gp[hcw.data$profession=="9"] <- 1
+      hcw.data$prof_gp[hcw.data$profession=="10"] <- 1
+      hcw.data$prof_gp[hcw.data$profession=="11"] <- 2
+      hcw.data$prof_gp[hcw.data$profession=="12"] <- 3
+      hcw.data$prof_gp[hcw.data$profession=="14"] <- 3
+      
+    # compare prof and prof_gp
+    table(hcw.data$profession, hcw.data$profession_group)
+  
+    # prof name
+    hcw.data$prof_name <- NA
+    hcw.data$prof_name[hcw.data$profession==1] <- "Doctor"
+    hcw.data$prof_name[hcw.data$profession==2] <- "Nurse"
+    hcw.data$prof_name[hcw.data$profession==3] <- "Midwife"
+    hcw.data$prof_name[hcw.data$profession==6] <- "Pharmacist"
+    hcw.data$prof_name[hcw.data$profession==8] <- "Lab worker"
+    hcw.data$prof_name[hcw.data$profession==9] <- "MCHA"
+    hcw.data$prof_name[hcw.data$profession==10] <- "CHO/CHA"
+    hcw.data$prof_name[hcw.data$profession==11] <- "CHW"
+    hcw.data$prof_name[hcw.data$profession==12] <- "Cleaner/Porter"
+    hcw.data$prof_name[hcw.data$profession==14] <- "Admin"
+    
+    # 14. ethnic group regroup small in others
+    hcw.data$ethnic_gp[hcw.data$ethnic_gp==9] <- 14
+    hcw.data$ethnic_gp[hcw.data$ethnic_gp==10] <-14
+    hcw.data$ethnic_gp[hcw.data$ethnic_gp==11] <-14
+    hcw.data$ethnic_gp[hcw.data$ethnic_gp==8] <- 14
+ 
     # urban rural?
-        # keep only needed variables (need to add two duration vars)
-keep.these <- c("district", "health_ctr_name", "health_ctr_type", "interv_name", "sex", "age_gp", "ethnic_gp", "rel", "full_time", "payroll", "profession_group", "profession", "stay_6mo", "stay_24mo", "other_hc_yn","num_hc", "break.", "risk_contact_fluids","risk_contact_clothes", "risk_contact_body", "vacc_op", "vacc_pos", "ebola_contact_yn", "ebola_hcw_yn", "edu", "hh_num", "hh_radio", "hh_tv", "hh_income", "duration_job", "duration_hcw", "ses_score", "ses_gp" , "edu_gp"  )
+    hcw.data$urban <- NA
+    hcw.data$urban[hcw.data$district==1] <- 1
+    hcw.data$urban[hcw.data$district==2] <- 0
+    hcw.data$urban[hcw.data$health_ctr_name=="kambia district hospital" | hcw.data$health_ctr_name=="red cross clinic"] <- 1
+       
+    
+     # keep only needed variables (need to add two duration vars)
+    keep.these <- c("district", "health_ctr_name", "health_ctr_type", "interv_name", "sex", "age_gp", "ethnic_gp", "rel", "full_time", "payroll", "profession", "stay_6mo", "stay_24mo", "other_hc_yn","num_hc", "break.", "risk_contact_fluids","risk_contact_clothes", "risk_contact_body", "vacc_op", "vacc_pos",  "ebola_contact_yn", "ebola_hcw_yn", "edu", "hh_num", "hh_radio", "hh_tv", "hh_income", "duration_job", "duration_hcw", "ses_score", "ses_gp" , "edu_gp", "income_gp", "prof_name", "prof_gp", "urban"  )
 hcw.data <- hcw.data[, keep.these]
  
-
-# ROZ Q:
-#1)HOW TO TAKE HHSIZE into account in SES variable
-#2where hcw-job is more than -1: NA??  DECISION FOR ROZ TO TAK: ~200 longer HCW, ca 40 longer job than HCW (20 more than 1 year difference (maybe understood job as payroll?)) ca 50 first job
-#3) what to do if missing income for ses?
