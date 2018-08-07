@@ -60,6 +60,8 @@ statistic <- function(x, inds) {fitdist(x[inds],"exp")$estimate}
 bs.job <- boot(hcw.data$duration_job[!is.na(hcw.data$duration_job)], statistic, R = 5000)
 print(boot.ci(bs.job, conf=0.95, type="bca"))
 
+# CI BS: 0.1469 - 0.1893 (ordinary nonparametric bootstrap)
+
 #create table with distributions based on bootstrapped rate
 nsims <- 5000
 ncols <- 42
@@ -330,15 +332,20 @@ statistic <- function(x, inds) {fitdist(x[inds],"gamma")$estimate}
 
 bs <- boot(hcw.data$duration_hcw[!is.na(hcw.data$duration_hcw)], statistic, R = 5000)
 print(boot.ci(bs, conf=0.95, type="bca"))
-print(boot.ci(bs$t[,2], conf=0.95, type="bca"))
+#print(boot.ci(bs$t[,2], conf=0.95, type="bca"))
 
 f1b<-fitdist(hcw.data$duration_hcw[!is.na(hcw.data$duration_hcw) ],"gamma",method="mle")
 b1b<-bootdist(f1b, niter = 5000)
 summary(b1b)
 
-#shape () 1.14 1.57)
-#rate  0.1246115 0.1046716 0.1486943
+# nonparametric
+#shape (1.353939) 1.141 1.576)
+#rate  0.123906 ??0.1046716 ??0.1486943
 
+    # parametric bootstrap results: 
+    #Median      2.5%     97.5%
+    # shape 1.3601715 1.1814576 1.5796533
+    #rate  0.1246467 0.1045813 0.1488273
 #graphic
 statistic <- function(x, inds) {fitdist(x[inds],"gamma")$estimate}
 
@@ -398,4 +405,38 @@ table(hcw.data$stay_6mo) # 224 (73,4%) very likely, 11,8% very unlikely
 table(hcw.data$stay_24mo) # 106 (34,8%) very likely
 table(hcw.data$payroll) # 179 (58,9%) on payroll, 125 volunteer
 table(hcw.data$full_time) # 284 (93,1%) full-time
+
+
+
+# C| density function gamma
+shape_hcw <- 1.360
+rate_hcw=0.125
+
+density_hcw <- pgamma(1:50,shape = shape_hcw, rate =rate_hcw)
+acceptance <- 0.763
+acceptance_high <- 0.964
+waning_low <- 0
+waning_mid <- 0.1
+waning_high <- 0.5
+reach <- 1
+efficacy <- 1
+efficacy_low <- 0.75
+coverage <- c()
+for(t in (1:20)) {
+  coverage[t] <- acceptance*reach*efficacy*(1-waning_low)*(1-density_hcw[t])
+}
+
+# with high acceptance sensitivity
+coverage_high <- c()
+for(t in (1:20)) {
+  coverage_high[t] <- acceptance_high*reach*efficacy*(1-waning_low)*(1-density_hcw[t])
+}
+
+# with waning immunity
+coverage_waning <- c()
+for(t in (1:20)) {
+  coverage_waning[t] <- acceptance*reach*efficacy*((1-waning_mid)^t)*(1-density_hcw[t])
+}
+
+# 
 
