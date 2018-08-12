@@ -1,5 +1,7 @@
 # Vaccine acceptance
 require(RColorBrewer)
+require(nnet)
+require(aod)
 
 # prepare color pallettes
 display.brewer.pal(n = 3, name = 'RdBu')
@@ -13,7 +15,6 @@ pal6 <- brewer.pal(n = 6, name = "RdBu")
 # +++++++ 1| CRUDE ANALYSIS ++++++++
 table(hcw.data$vacc_op) # 232 good opinion, 20 changed mind with info, 41 dont know, 11 negative opinion
 table(hcw.data$vacc_pos) # 232 good op (76%), 72 not entirely positive
-table(hcw.data$vacc_neg) # 232 good op (76%), 72 not entirely positive
 
 # make vacc_op with 3 levels
 hcw.data$vacc_op[hcw.data$vacc_op==1| hcw.data$vacc_op==2] <- 1
@@ -168,6 +169,13 @@ summary(crude18)
 exp(coef(crude18)) 
 exp(confint(crude18))
 
+#19. Hc type
+table(hcw.data$hc_type_gp, hcw.data$vacc_pos)
+crude19 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$hc_type_gp))
+summary(crude19)
+exp(coef(crude19)) 
+exp(confint(crude19))
+wald.test(b = coef(crude19), Sigma = vcov(crude19), Terms = 2:4)
 
 # +++++++ 2| ADJUSTED  regression (for positive attitude on vacc: vacc_pos) ++++++
 mod1 <- glm(hcw.data$vacc_pos ~ hcw.data$sex + relevel(as.factor(hcw.data$age_gp), ref = "2") + as.factor(hcw.data$prof_gp) +  as.factor(hcw.data$edu_gp)  + hcw.data$payroll + as.factor(hcw.data$income_gp) + hcw.data$ebola_hcw_yn, family=binomial(link='logit'))
