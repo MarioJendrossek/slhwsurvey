@@ -312,16 +312,20 @@ summary(lognormalmodel)
 #sex
 mod_gam_sex <- glm(hcw.data$duration_hcw ~ hcw.data$sex, family = "Gamma", na.action = "na.omit")
 summary(mod_gam_sex)
+exp(coef(mod_gam_sex))
 # not associated
 
 # age
 mod_gam_age <- glm(hcw.data$duration_hcw ~ as.factor(hcw.data$age_gp), family = "Gamma", na.action = "na.omit")
 summary(mod_gam_age)
+exp(coef(mod_gam_age))
+exp(confint((mod_gam_age)))
 # strong asso
 
 # district
 mod_gam_dist <- glm(hcw.data$duration_hcw ~ hcw.data$district, family = "Gamma", na.action = "na.omit")
 summary(mod_gam_dist)
+exp(coef(mod_gam_dist))
 # not associated
 
 # edu
@@ -357,11 +361,13 @@ summary(mod_gam_hctype)
 # full-time
 mod_gam_ft <- glm(hcw.data$duration_hcw ~ hcw.data$full_time, family = "Gamma", na.action = "na.omit")
 summary(mod_gam_ft)
+exp(coef(mod_gam_ft))
 # weakly associated
 
 #payroll
 mod_gam_payr <- glm(hcw.data$duration_hcw ~ hcw.data$payroll, family = "Gamma", na.action = "na.omit")
 summary(mod_gam_payr)
+exp(coef(mod_gam_payr))
 # strongly associated
 
 # num hc
@@ -370,8 +376,7 @@ summary(mod_gam_numhc)
 # strongly associated
 
 # urban
-mod_gam_urb <- glm(hcw.data$duration_hcw ~ hcw.data$urban, family = "Gamma", na.action = "na.omit")
-summary(mod_gam_urb)
+q
 # strongly associated
 
 #multivariate
