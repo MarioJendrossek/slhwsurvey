@@ -64,23 +64,25 @@ dev.off()
 table(hcw.data$sex, hcw.data$profession)
 prof.sex.table <- table(hcw.data$sex, as.factor(hcw.data$prof_name))
 counts3 <- prop.table(prof.sex.table,2)
-legend3 <- c("female", "male")
+counts3 <- counts3*100
+legend3 <- c("Female", "Male")
 pdf("C:/Users/Mario/Sync/Sierra Leone survey/paper/figures/sex_prof.pdf", height = 7, width = 15)
-par(mfrow=c(1, 1), mar=c(5, 5, 4, 6))
+par(mfrow=c(1, 1), mar=c(5, 5, 4, 6), las=1)
 barplot(counts3, main="",
-        xlab="Profession", ylab="Proportion", col=pal3[c(1,3)],
+        xlab="Profession", ylab="Percentage", col=pal3[c(1,3)],cex.axis = 1.2, 
         legend = legend3, args.legend = list(x = "topright", bty = "n", inset=c(-0.07, 0)),
-        names.arg = c("Admin(n=8)", "CHO/A(n=23)", "CHW(n=18)", "Support(n=35)", "Doctor(n=4)", "Lab(n=31)", "MCHA(n=24)", "Midwife(n=18)", "Nurse(n=134)", "Pharma(n=7)"))
+        names.arg = c("Admin\n(n=8)", "CHO/A\n(n=23)", "CHW\n(n=18)", "Support\n(n=35)", "Doctor\n(n=4)", "Lab\n(n=31)", "MCHA\n(n=24)", "Midwife\n(n=18)", "Nurse\n(n=134)", "Pharma\n(n=7)"))
 dev.off()
 
 # HC by district
 dist_ctrtype_tbl <- table(hcw.data$health_ctr_type, hcw.data$district)
 counts4 <- prop.table(dist_ctrtype_tbl,2)
+counts4 <- counts4 *100
 legend4 <- c("Govt hospital", "Private clinic", "NGO clinic", "CHC", "CHP", "MCHP")
-pdf("C:/Users/Mario/Sync/Sierra Leone survey/paper/figures/hctype_district.pdf", height = 7, width = 9)
-par(mfrow=c(1, 1), mar=c(5, 5, 4, 7.2))
+pdf("C:/Users/Mario/Sync/Sierra Leone survey/paper/figures/hctype_district.pdf", height = 7, width = 5)
+par(mfrow=c(1, 1), mar=c(5, 5, 4, 7.2), las=1)
 barplot(counts4, main="",
-        xlab="District", ylab="Proportion", col=pal6[1:6],
+        xlab="District", ylab="Percentage", col=pal6[1:6],
         legend = legend4, args.legend = list(x = "topright", bty = "n", inset=c(-0.19, 0)),
         names.arg = c("Freetown (n=183)", "Kambia (n=122)"))
 dev.off()
@@ -91,6 +93,8 @@ dev.off()
 
 # (0.638-0.62)/(sqrt((0.62*(1-0.62))/305))
 prop.test(x=195, n =305, p=0.62)
+
+
 
 # professions: oversampled those in hospitals (lab workers), undersampled PHUs
 # religion,
