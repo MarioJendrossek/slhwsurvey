@@ -359,8 +359,15 @@
     hcw.data$urban[hcw.data$district==2] <- 0
     hcw.data$urban[hcw.data$health_ctr_name=="kambia district hospital" | hcw.data$health_ctr_name=="red cross clinic"] <- 1
        
+    # hc types regroup
+    
+    hcw.data$hc_type_gp <- NA
+    hcw.data$hc_type_gp[hcw.data$health_ctr_type==1] <- 1
+    hcw.data$hc_type_gp[hcw.data$health_ctr_type==5] <- 2
+    hcw.data$hc_type_gp[hcw.data$health_ctr_type==6 | hcw.data$health_ctr_type==7] <- 3
+    hcw.data$hc_type_gp[hcw.data$health_ctr_type==2 | hcw.data$health_ctr_type==4] <- 4
     
      # keep only needed variables (need to add two duration vars)
-    keep.these <- c("district", "health_ctr_name", "health_ctr_type", "interv_name", "sex", "age_gp", "ethnic_gp", "rel", "full_time", "payroll", "profession", "stay_6mo", "stay_24mo", "other_hc_yn","num_hc", "break.", "risk_contact_fluids","risk_contact_clothes", "risk_contact_body", "vacc_op", "vacc_pos",  "ebola_contact_yn", "ebola_hcw_yn", "edu", "hh_num", "hh_radio", "hh_tv", "hh_income", "duration_job", "duration_hcw", "ses_score", "ses_gp" , "edu_gp", "income_gp", "prof_name", "prof_gp", "urban"  )
+    keep.these <- c("district", "health_ctr_name", "health_ctr_type", "interv_name", "sex", "age_gp", "ethnic_gp", "rel", "full_time", "payroll", "profession", "stay_6mo", "stay_24mo", "other_hc_yn","num_hc", "break.", "risk_contact_fluids","risk_contact_clothes", "risk_contact_body", "vacc_op", "vacc_pos",  "ebola_contact_yn", "ebola_hcw_yn", "edu", "hh_num", "hh_radio", "hh_tv", "hh_income", "duration_job", "duration_hcw", "ses_score", "ses_gp" , "edu_gp", "income_gp", "prof_name", "prof_gp", "urban", "hc_type_gp"  )
 hcw.data <- hcw.data[, keep.these]
  
