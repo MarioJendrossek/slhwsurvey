@@ -376,13 +376,13 @@ summary(mod_gam_numhc)
 # strongly associated
 
 # urban
-q
+mod_gam_urban <- glm(hcw.data$duration_hcw ~ hcw.data$urban, family = "Gamma", na.action = "na.omit")
+summary(mod_gam_urban)
 # strongly associated
 
 #multivariate
 gammamodel <- glm(hcw.data$duration_hcw ~ hcw.data$sex +  hcw.data$age_gp + as.factor(hcw.data$edu_gp) + as.factor(hcw.data$income_gp) + hcw.data$full_time + hcw.data$num_hc + hcw.data$payroll, family = "Gamma", na.action = "na.omit")
 summary(gammamodel)
-
 
 
 # plot both histograms on one graph
@@ -468,6 +468,9 @@ dev.off()
 ## polygon(y=c(colQuantiles(bs.table.hcw, probs=0.025, na.rm=T), rev(colQuantiles(bs.table.hcw, probs=0.975, na.rm=T))),
 ##         x=c(1:46, rev(1:46)), col=transp("firebrick", 0.3), border=NA)
 ## dev.off()
+
+
+
 
 # B|3 additional Qs on turnover
 table(hcw.data$break.) # 270 (88,8%) without break, 294 (96,7%) with max 6mo break, 10 (3,3%)
