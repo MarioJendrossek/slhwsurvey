@@ -1,7 +1,6 @@
 # minimal script for Sam
 
 # read in data
-setwd(folder)
 hcw.data <- as.data.frame(read.csv("HCWsurvey_limited.csv"))
 
 # Turnover script
