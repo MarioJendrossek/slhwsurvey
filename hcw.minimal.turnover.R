@@ -1,6 +1,5 @@
 # minimal script for Sam
 
-folder <- "C:/Users/Mario/Desktop/docs LSHTM/R analysis"
 # read in data
 setwd(folder)
 hcw.data <- as.data.frame(read.csv("HCWsurvey_limited.csv"))
