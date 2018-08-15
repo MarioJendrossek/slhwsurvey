@@ -112,8 +112,6 @@ dev.off()
 
 
 # ++++++ B|1|2 regression++++++
-
-#mod0 <- lm(log(hcw.data$duration_job))
 gm_mean = function(x, na.rm=TRUE){
   exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
 }
@@ -122,6 +120,7 @@ gm_mean(hcw.data$duration_job)
 mod0 <- lm(log(hcw.data$duration_job) ~1)
 summary(mod0)
 exp(coef(mod0))
+
 # bivariate
 #sex
 mod_exp_sex <- lm(log(hcw.data$duration_job) ~ hcw.data$sex,  na.action = "na.omit")
