@@ -38,7 +38,7 @@ ggplot(hcw.data, aes(x=age_gp)) + geom_histogram()
 counts <- table(hcw.data$hh_radio, hcw.data$hh_tv)
 legend1 <- c("No radio", "Radio")
 barplot(counts, main="",
-        xlab="TV ownership", col=pal2[c(1,3)],
+        xlab="TV ownership", col=pal3[c(1,3)],
         legend = legend1)
 
 # most people own radio (>80%), most people also have tv (>66%). People with tv more likely to have radio.
@@ -83,9 +83,24 @@ pdf("C:/Users/Mario/Sync/Sierra Leone survey/paper/figures/hctype_district.pdf",
 par(mfrow=c(1, 1), mar=c(5, 5, 4, 7.2), las=1)
 barplot(counts4, main="",
         xlab="District", ylab="Percentage", col=pal6[1:6],
-        legend = legend4, args.legend = list(x = "topright", bty = "n", inset=c(-0.19, 0)),
-        names.arg = c("Freetown (n=183)", "Kambia (n=122)"))
+        legend = legend4, args.legend = list(x = "topright", bty = "n", inset=c(-0.50, 0)),
+        names.arg = c("Freetown\n (n=183)", "Kambia \n(n=122)"))
 dev.off()
+
+
+# in one figure
+pdf("C:/Users/Mario/Sync/Sierra Leone survey/paper/figures/sex_prof_hc_district.pdf", height = 10, width = 10)
+par(mfrow=c(2, 1), mar=c(5, 5, 4, 6), las=1)
+barplot(counts3, main="",
+        xlab="Profession", ylab="Percentage", col=pal3[c(1,3)],cex.axis = 1.2, 
+        legend = legend3, args.legend = list(x = "topright", bty = "n", inset=c(-0.1, 0)),
+        names.arg = c("Admin\n(n=8)", "CHO/A\n(n=23)", "CHW\n(n=18)", "Support\n(n=35)", "Doctor\n(n=4)", "Lab\n(n=31)", "MCHA\n(n=24)", "Midwife\n(n=18)", "Nurse\n(n=134)", "Pharma\n(n=7)"))
+barplot(counts4, main="",
+        xlab="District", ylab="Percentage", col=pal6[1:6],
+        legend = legend4, args.legend = list(x = "topright", bty = "n", inset=c(-0.15, 0)),
+        names.arg = c("Freetown\n (n=183)", "Kambia \n(n=122)"))
+dev.off()
+
 
 # ++++ check whether population representative (asked Hana for more info) ++++
 # sex, age...
