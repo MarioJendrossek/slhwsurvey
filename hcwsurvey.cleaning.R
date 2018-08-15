@@ -371,7 +371,7 @@
     keep.these <- c("district", "health_ctr_name", "health_ctr_type", "interv_name", "sex", "age_gp", "ethnic_gp", "rel", "full_time", "payroll", "profession", "stay_6mo", "stay_24mo", "other_hc_yn","num_hc", "break.", "risk_contact_fluids","risk_contact_clothes", "risk_contact_body", "vacc_op", "vacc_pos",  "ebola_contact_yn", "ebola_hcw_yn", "edu", "hh_num", "hh_radio", "hh_tv", "hh_income", "duration_job", "duration_hcw", "ses_score", "ses_gp" , "edu_gp", "income_gp", "prof_name", "prof_gp", "urban", "hc_type_gp"  )
 hcw.data <- hcw.data[, keep.these]
  
-keep.these2 <- c("district", "health_ctr_type", "sex", "age_gp", "ethnic_gp", "rel", "full_time", "payroll", "stay_6mo", "stay_24mo", "other_hc_yn","num_hc", "break.", "risk_contact_fluids","risk_contact_clothes", "risk_contact_body", "vacc_op", "vacc_pos",  "ebola_contact_yn", "ebola_hcw_yn", "edu", "hh_num", "hh_radio", "hh_tv", "hh_income", "duration_job", "duration_hcw", "ses_score", "ses_gp" , "edu_gp", "income_gp", "prof_gp", "urban", "hc_type_gp"  )
+keep.these2 <- c("district", "health_ctr_type", "sex", "age_gp", "ethnic_gp", "rel", "full_time", "payroll", "break.", "vacc_op", "vacc_pos", "duration_job", "duration_hcw", "num_hc", "edu_gp", "income_gp", "prof_gp", "urban", "hc_type_gp"  )
 hcw.data.limited <- hcw.data[,keep.these2]
 
 write.csv(file="HCWsurvey_limited.csv", x=hcw.data.limited)

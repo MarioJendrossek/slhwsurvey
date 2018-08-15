@@ -11,6 +11,7 @@ library(matrixStats)
 require(fitdistrplus)
 require(ggplot2)
 require(gamlss)
+require(aod)
 
 
 # prepare color pallettes
