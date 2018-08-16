@@ -113,14 +113,20 @@ hcw.data %>%
 if (FALSE){
   
   # A| FIT DISTRIBUTION
-  fitdist(hcw.data$duration_job[!is.na(hcw.data$duration_job)],
-          distr = "gamma",
-          method = "mle") # provides alpha and beta
-
-  fitdist(hcw.data$duration_hcw[!is.na(hcw.data$duration_hcw)],
-          distr = "gamma",
-          method = "mle") # provides alpha and beta
   
+  # get distribution parameters and regular 
+  hcw.data %>%
+    dplyr::select(`In current job` = duration_job, 
+                  `As health care worker` = duration_hcw) %>%
+    tidyr::gather(key, value) %>%
+    na.omit %>%
+    split(.$key) %>%
+    purrr::map(~MASS::fitdistr(.x$value,
+                               densfun = "gamma")) %>%
+    purrr::map_df(~bind_cols(
+      tidy(.x),
+      as.data.frame(confint(.x))),
+      .id="Duration")
   
   # B| regression
   gm_mean = function(x, na.rm=TRUE){
@@ -493,3 +499,59 @@ ggsave(filename = "Figures\\parameters.png",
 # i.e. g(mu) = 1/mu
 # so a negative parameter indicates an increase in outcome
 # and a positive parameter indicates a decrease in outcome
+
+
+# what about the substantive modelling?
+
+hcw.data.forsent <- hcw.data %>%
+  dplyr::select(
+    # response
+    vacc_pos,
+    # explanatory
+    duration_hcw,
+    duration_job,
+    sex,
+    age_gp ,
+    urban,
+    #num_hc, actually on causal pathway
+    prof_gp,
+    edu_gp,
+    income_gp,
+    payroll,
+    ethnic_gp,
+    health_ctr_type ,
+    full_time
+  ) %>%
+  na.omit
+
+sentiment <- glm(data = hcw.data.forsent,
+                 vacc_pos ~ .,
+                 family = binomial())
+
+# variable selection
+sentiment_step <- stepAIC(sentiment, 
+                          trace = FALSE)#,
+                          #k = log(nrow(hcw.data.forsent)))
+
+tidy(sentiment_step, conf.int=TRUE) %>%
+  dplyr::filter(term != "(Intercept)") %>%
+  dplyr::mutate_at(.vars = vars(estimate, conf.low, conf.high),
+                   .funs = exp) %>%
+  dplyr::select(-std.error, -statistic) %>%
+  dplyr::mutate(term = gsub(pattern = "(\\(|\\))", 
+                            replacement = "",
+                            x = term),
+                term = gsub(pattern = "_gp", 
+                            replacement = " group ",
+                            x = term),
+                term = gsub(pattern = "(?<! )2$",
+                            replacement = "\\1", perl=T,
+                            x = term),
+                term = stringr::str_to_title(term),
+                term = gsub(pattern = "Edu",
+                            replacement = "Education",
+                            x = term),
+                term = fct_inorder(term)) %>%
+  dplyr::mutate(`Odds ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
+                             estimate, conf.low, conf.high)) %>%
+  dplyr::select(Term = term, `Odds ratio`)
