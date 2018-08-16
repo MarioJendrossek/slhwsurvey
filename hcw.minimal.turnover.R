@@ -126,7 +126,8 @@ if (FALSE){
     purrr::map_df(~bind_cols(
       tidy(.x),
       as.data.frame(confint(.x))),
-      .id="Duration")
+      .id="Duration") %>%
+    write_csv("Figures\\distribution_parameters.csv")
   
   # B| regression
   gm_mean = function(x, na.rm=TRUE){
