@@ -44,13 +44,13 @@ chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$hh_radio)) # not associated wit
 
 # crude ORs
 # 1. sex
-crude1 <- glm(hcw.data$vacc_pos~hcw.data$sex)
+crude1 <- glm(family = binomial(), hcw.data$vacc_pos~hcw.data$sex)
 summary(crude1)
 exp(coef(crude1)) 
 exp(confint(crude1))
 
 # 2. age
-crude2 <- glm(hcw.data$vacc_pos~relevel(as.factor(hcw.data$age_gp), ref="2"))
+crude2 <- glm(family = binomial(), hcw.data$vacc_pos~relevel(as.factor(hcw.data$age_gp), ref="2"))
 summary(crude2)
 exp(coef(crude2)) 
 exp(confint(crude2))
@@ -59,7 +59,7 @@ exp(confint(crude2))
 wald.test(b = coef(crude2), Sigma = vcov(crude2), Terms = 2:5)
 
 # 3. Edu group
-crude3 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$edu_gp))
+crude3 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$edu_gp))
 summary(crude3)
 exp(coef(crude3)) 
 exp(confint(crude3))
@@ -68,25 +68,25 @@ exp(confint(crude3))
 wald.test(b = coef(crude3), Sigma = vcov(crude3), Terms = 2:3)
 
 # 4. District
-crude4 <- glm(hcw.data$vacc_pos~hcw.data$district)
+crude4 <- glm(family = binomial(), hcw.data$vacc_pos~hcw.data$district)
 summary(crude4)
 exp(coef(crude4)) 
 exp(confint(crude4))
 
 # 5. Payroll
-crude5 <- glm(hcw.data$vacc_pos~hcw.data$payroll)
+crude5 <- glm(family = binomial(), hcw.data$vacc_pos~hcw.data$payroll)
 summary(crude5)
 exp(coef(crude5)) 
 exp(confint(crude5))
 
 # 6. HCW ebola
-crude6 <- glm(hcw.data$vacc_pos~hcw.data$ebola_hcw_yn)
+crude6 <- glm(family = binomial(), hcw.data$vacc_pos~hcw.data$ebola_hcw_yn)
 summary(crude6)
 exp(coef(crude6)) 
 exp(confint(crude6))
 
 # 7. SES 
-crude7 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$ses_gp))
+crude7 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$ses_gp))
 summary(crude7)
 exp(coef(crude7)) 
 exp(confint(crude7))
@@ -95,7 +95,7 @@ exp(confint(crude7))
 wald.test(b = coef(crude7), Sigma = vcov(crude7), Terms = 2:3)
 
 # 8. Income
-crude8 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$income_gp))
+crude8 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$income_gp))
 summary(crude8)
 exp(coef(crude8)) 
 exp(confint(crude8))
@@ -104,13 +104,13 @@ exp(confint(crude8))
 wald.test(b = coef(crude8), Sigma = vcov(crude8), Terms = 2:3)
 
 # 9. rel
-crude9 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$rel))
+crude9 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$rel))
 summary(crude9)
 exp(coef(crude9)) 
 exp(confint(crude9))
 
 # 10. ethnic group
-crude10 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$ethnic_gp))
+crude10 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$ethnic_gp))
 summary(crude10)
 exp(coef(crude10)) 
 exp(confint(crude10))
@@ -119,7 +119,7 @@ exp(confint(crude10))
 wald.test(b = coef(crude10), Sigma = vcov(crude10), Terms = 2:9)
 
 # 11. prof gp
-crude11 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$prof_gp))
+crude11 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$prof_gp))
 summary(crude11)
 exp(coef(crude11)) 
 exp(confint(crude11))
@@ -128,7 +128,7 @@ exp(confint(crude11))
 wald.test(b = coef(crude11), Sigma = vcov(crude11), Terms = 2:4)
 
 # 12. income gp
-crude12 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$income_gp))
+crude12 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$income_gp))
 summary(crude12)
 exp(coef(crude12)) 
 exp(confint(crude12))
@@ -137,25 +137,25 @@ exp(confint(crude12))
 wald.test(b = coef(crude12), Sigma = vcov(crude12), Terms = 2:3)
 
 # 13. full-time
-crude13 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$full_time))
+crude13 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$full_time))
 summary(crude13)
 exp(coef(crude13)) 
 exp(confint(crude13))
 
 # 14. Ebola contact
-crude14 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$ebola_contact_yn))
+crude14 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$ebola_contact_yn))
 summary(crude14)
 exp(coef(crude14)) 
 exp(confint(crude14))
 
 # 15. TV
-crude15 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$hh_tv))
+crude15 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$hh_tv))
 summary(crude15)
 exp(coef(crude15)) 
 exp(confint(crude15))
 
 # 16. Radio
-crude16 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$hh_radio))
+crude16 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$hh_radio))
 summary(crude16)
 exp(coef(crude16)) 
 exp(confint(crude16))
@@ -164,14 +164,14 @@ exp(confint(crude16))
 
 #18. urban
 table(hcw.data$urban, hcw.data$vacc_pos)
-crude18 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$urban))
+crude18 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$urban))
 summary(crude18)
 exp(coef(crude18)) 
 exp(confint(crude18))
 
 #19. Hc type
 table(hcw.data$hc_type_gp, hcw.data$vacc_pos)
-crude19 <- glm(hcw.data$vacc_pos~as.factor(hcw.data$hc_type_gp))
+crude19 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$hc_type_gp))
 summary(crude19)
 exp(coef(crude19)) 
 exp(confint(crude19))
