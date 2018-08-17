@@ -74,7 +74,7 @@ hcw.glm.data.long <- hcw.data.long %>%
 # convert the intercepts to a small data frame
 hcw.glm.data.long.intercepts <- 
   dplyr::filter(hcw.glm.data.long, term == "(Intercept)") %>%
-  dplyr::rename(`Baseline probability` = "value") %>%
+  dplyr::rename(`Baseline probability ` = "value") %>%
   dplyr::select(-p.value, -term)
 
 # convert the effects to something we can join with the intercepts
@@ -124,23 +124,18 @@ wald.test(b = coef(mod1), Sigma = vcov(mod1), Terms = 13:14)
 
 # MULTINOMIAL LOGRn
 # associations with vacc_op
-chisq.test(as.factor(hcw.data$vacc_op), hcw.data$sex) # not associated with sex
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$age_gp)) # not associated with age
-chisq.test(hcw.data$vacc_op, hcw.data$rel) # not associated with rel
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$ethnic_gp)) # not associated with ethnic gp
-chisq.test(hcw.data$vacc_op, hcw.data$district) # strongly//not associated with district
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$health_ctr_type)) # not associated with health ctr type
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$ses_gp)) # weakly associated with ses_gp
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$prof_gp)) # not associated with prof group
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$profession)) # not associated with prof
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$edu_gp)) # not associated with edu (but most acceptance in group 2)
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$ebola_contact_yn)) # not associated with contact
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$ebola_hcw_yn)) # weakly associated with work exp (but negative)
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$payroll)) # associated payroll (but negative): on payroll have worse outcome
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$full_time)) # not associated with full-time
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$income_gp)) # associated with income group
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$hh_tv)) # weakly associated with tv
-chisq.test(hcw.data$vacc_op, as.factor(hcw.data$hh_radio)) # not associated with radio
+
+hcw.data %>%
+  dplyr::select(one_of(hcw.factors), vacc_op) %>%
+  mutate(row = row_number()) %>%
+  tidyr::gather(key, value, -row, -vacc_op) %>%
+  na.omit %>%
+  split(.$key) %>%
+  purrr::map(~chisq.test(.$vacc_op, .$value)) %>%
+  purrr::map_df(~data.frame(p.value = .x$p.value), .id="key") %>%
+  dplyr::arrange(p.value)
+
+# income seems to be the only variable potentially associated
 
 
 multinom.mod <- multinom(hcw.data$vacc_op ~  hcw.data$sex + relevel(as.factor(hcw.data$age_gp), ref="2") + as.factor(hcw.data$income_gp)  +  hcw.data$payroll + hcw.data$ebola_hcw_yn)
