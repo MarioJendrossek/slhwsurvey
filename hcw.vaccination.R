@@ -146,3 +146,5 @@ p
 
 
 # MULTINOMIAL REGRESSION IDEAL BUT Sample size not big enough
+
+# check hcw.sentiment.modelling for sam's logistic regression approaches
