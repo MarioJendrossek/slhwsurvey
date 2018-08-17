@@ -696,10 +696,35 @@ bind_cols(boot_estimates, boot_cis) %>%
 # going on
 
 library(glmnet)
+X_net <-
+  dplyr::select(hcw.data.forsent,
+                   -vacc_pos) %>%
+  data.matrix
 
-sentiment_glmnet <- glmnet(x = dplyr::select(hcw.data.forsent,
-                                                 -vacc_pos) %>%
-                                 as.matrix,
-                               y = hcw.data.forsent$vacc_pos,
-                               family = "binomial")
+y_net <- hcw.data.forsent$vacc_pos
 
+sentiment_glmnet <- glmnet(x = X_net,
+                           y = y_net,
+                           family = "binomial")
+
+tidy(sentiment_glmnet) %>%
+  dplyr::filter(step == max(step))
+
+
+lambda_net <- cv.glmnet(X_net, y_net)$lambda.min
+
+
+glance(sentiment_glmnet)
+coef(sentiment_glmnet, s = lambda_net)
+
+
+predict(object = sentiment_glmnet,
+        newx = X_net, 
+        type = "response",
+        s = lambda_net) %>%
+  data.frame(pred = as.numeric(.),
+             obs = hcw.data.forsent$vacc_pos) %>%
+  ggplot(data=., aes(x=factor(obs), y=pred)) +
+  geom_boxplot()
+
+# regularised logistic regression is bad here
