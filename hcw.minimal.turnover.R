@@ -10,6 +10,7 @@ require(fitdistrplus)
 library(tidyverse)
 require(gamlss)
 library(magrittr)
+library(broom)
 
 # read in data
 hcw.data <- read_csv("HCWsurvey_limited.csv")
@@ -58,29 +59,6 @@ hcw.data.forreg <- hcw.data %>%
 
 # 1. Duration current job
 
-# -Z| Plot data
-
-p_duration <- hcw.data %>%
-  dplyr::select(`In current job` = duration_job, 
-                `As health care worker` = duration_hcw) %>%
-  tidyr::gather(key, value) %>%
-  na.omit %>%
-  ggplot(data = ., aes(x=value)) +
-  geom_histogram(binwidth=2.5, center = 1.25,
-                 color = "black",
-                 fill = "grey75") +
-  facet_grid(. ~ key) +
-  theme_bw() +
-  xlab("Duration of employment (years)")
-
-ggsave(filename = "Figures\\duration.png",
-       width = 15, height = 7.5, units = "cm", dpi = 600,
-       plot = p_duration)
-
-na_count <- function(x){sum(!is.na(x))}
-
-
-
 # summary statistics
 
 hcw.data %>%
@@ -110,25 +88,98 @@ hcw.data %>%
   inner_join(hcw.data)
 
 
-if (FALSE){
-  
-  # A| FIT DISTRIBUTION
-  
-  # get distribution parameters and regular 
-  hcw.data %>%
-    dplyr::select(`In current job` = duration_job, 
-                  `As health care worker` = duration_hcw) %>%
-    tidyr::gather(key, value) %>%
-    na.omit %>%
-    split(.$key) %>%
-    purrr::map(~MASS::fitdistr(.x$value,
-                               densfun = "gamma")) %>%
-    purrr::map_df(~bind_cols(
-      tidy(.x),
-      as.data.frame(confint(.x))),
-      .id="Duration") %>%
-    write_csv("Figures\\distribution_parameters.csv")
-  
+
+# A| FIT DISTRIBUTION
+
+# get distribution parameters and regular 
+hcw.data %>%
+  dplyr::select(`In current job` = duration_job, 
+                `As health care worker` = duration_hcw) %>%
+  tidyr::gather(key, value) %>%
+  na.omit %>%
+  split(.$key) %>%
+  purrr::map(~MASS::fitdistr(.x$value,
+                             densfun = "gamma")) %>%
+  purrr::map_df(~bind_cols(
+    tidy(.x),
+    as.data.frame(confint(.x))),
+    .id="Duration") %>%
+  write_csv("Figures\\distribution_parameters.csv")
+
+
+x_values <- seq(0,
+                ceiling(max(hcw.data$duration_hcw, na.rm=T)),
+                by = 1.25) + 0.5
+
+# plot with uncertainty
+distribution_bounds <- hcw.data %>%
+  dplyr::select(`In current job` = duration_job, 
+                `As health care worker` = duration_hcw) %>%
+  tidyr::gather(key, value) %>%
+  na.omit %>%
+  split(.$key) %>%
+  purrr::map(
+    # estimate parameters of gamma distributions that 
+    # describe the shape of the data
+    ~MASS::fitdistr(.x$value,
+                    densfun = "gamma")) %>%
+  purrr::map(# sample parameters from MLE estimate
+    ~mvtnorm::rmvnorm(n = 1000,
+                      mean = .x$estimate,
+                      sigma = .x$vcov)) %>%
+  purrr::map_df(
+    .id = "key",
+    # calculate densities with sampled parameters
+    ~data.frame(.x) %>%
+      dplyr::mutate(row = 1:nrow(.)) %>%
+      split(.$row) %>% # we may have been able to use nest() here
+      purrr::map_df(
+        # for each set of sampled parameters, what is the density?
+        .id="row", 
+        ~data.frame(x = x_values) %>%
+          dplyr::mutate(y = 
+                          dgamma(x = x,
+                                 shape = .x$shape,
+                                 rate = .x$rate)
+          ) # end calculation of density
+      ) 
+  ) %>%
+  group_by(key, x) %>% # calculate quantiles of draws of distributions
+  dplyr::summarise(ymin = quantile(y, 0.025),
+                   ymax = quantile(y, 0.975),
+                   y = median(y))
+
+# regular histogram, scaled as density rather than count
+p_duration <- hcw.data %>%
+  dplyr::select(`In current job` = duration_job, 
+                `As health care worker` = duration_hcw) %>%
+  tidyr::gather(key, value) %>%
+  na.omit %>%
+  ggplot(data = ., aes(x=value)) +
+  geom_histogram(binwidth=2.5, 
+                 center = 1.25,
+                 color = "black",
+                 fill = "grey90",
+                 aes(y=..density..)) +
+  facet_grid(. ~ key) +
+  theme_bw() +
+  xlab("Duration of employment (years)")
+
+# add on the uncertainty bounds
+p_duration <- p_duration +
+  geom_ribbon(data = distribution_bounds,
+              aes(x=x, ymin = ymin, ymax = ymax),
+              color=NA, fill="lightskyblue", alpha=0.5) +
+  geom_line(data= distribution_bounds,
+            aes(x=x, y=y),
+            lty=2)
+
+ggsave(filename = "Figures\\duration.png",
+       width = 15, height = 7.5, units = "cm", dpi = 600,
+       plot = p_duration)
+
+
+if (FALSE){ 
   # B| regression
   gm_mean = function(x, na.rm=TRUE){
     exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
@@ -462,7 +513,7 @@ mod_list %>%
                              Estimate, conf.low, conf.high)) %>%
   dplyr::select(-c(Estimate, conf.low, conf.high)) %>%
   write_csv("Figures\\parameters.csv")
-  
+
 
 p_parameters <- mod_list %>%
   purrr::map_df(~tidy(.x, conf.int=T),
@@ -532,7 +583,7 @@ sentiment <- glm(data = hcw.data.forsent,
 # variable selection
 sentiment_step <- stepAIC(sentiment, 
                           trace = FALSE)#,
-                          #k = log(nrow(hcw.data.forsent)))
+#k = log(nrow(hcw.data.forsent)))
 
 tidy(sentiment_step, conf.int=TRUE) %>%
   dplyr::filter(term != "(Intercept)") %>%
@@ -554,5 +605,5 @@ tidy(sentiment_step, conf.int=TRUE) %>%
                             x = term),
                 term = fct_inorder(term)) %>%
   dplyr::mutate(`Odds ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
-                             estimate, conf.low, conf.high)) %>%
+                                       estimate, conf.low, conf.high)) %>%
   dplyr::select(Term = term, `Odds ratio`)
