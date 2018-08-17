@@ -3,12 +3,12 @@
 # Turnover script
 
 library(conflicted)
-require(RColorBrewer)
+library(RColorBrewer)
 library(boot)
 library(matrixStats)
-require(fitdistrplus)
+library(fitdistrplus)
 library(tidyverse)
-require(gamlss)
+library(gamlss)
 library(magrittr)
 library(broom)
 
@@ -590,6 +590,87 @@ tidy(sentiment_step, conf.int=TRUE) %>%
   dplyr::mutate_at(.vars = vars(estimate, conf.low, conf.high),
                    .funs = exp) %>%
   dplyr::select(-std.error, -statistic) %>%
+  dplyr::mutate(term = gsub(pattern = "(\\(|\\))", 
+                            replacement = "",
+                            x = term),
+                term = gsub(pattern = "_gp", 
+                            replacement = " group ",
+                            x = term),
+                term = gsub(pattern = "(?<! )2$",
+                            replacement = "\\1", perl=T,
+                            x = term),
+                term = stringr::str_to_title(term),
+                term = gsub(pattern = "Edu",
+                            replacement = "Education",
+                            x = term),
+                term = fct_inorder(term)) %>%
+  dplyr::mutate(`Odds ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
+                                       estimate, conf.low, conf.high)) %>%
+  dplyr::select(Term = term, `Odds ratio`)
+
+sentiment_restricted <- glm(data = hcw.data.forsent,
+                            vacc_pos ~ payroll + edu_gp,
+                            family = binomial())
+
+tidy(sentiment_restricted, conf.int=T) %>%
+  dplyr::filter(term != "(Intercept)") %>%
+  dplyr::mutate_at(.vars = vars(estimate, conf.low, conf.high),
+                   .funs = exp) %>%
+  dplyr::select(term, estimate, conf.low, conf.high ) %>%
+  dplyr::mutate(term = gsub(pattern = "(\\(|\\))", 
+                            replacement = "",
+                            x = term),
+                term = gsub(pattern = "_gp", 
+                            replacement = " group ",
+                            x = term),
+                term = gsub(pattern = "(?<! )2$",
+                            replacement = "\\1", perl=T,
+                            x = term),
+                term = stringr::str_to_title(term),
+                term = gsub(pattern = "Edu",
+                            replacement = "Education",
+                            x = term),
+                term = fct_inorder(term)) %>%
+  dplyr::mutate(`Odds ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
+                                       estimate, conf.low, conf.high)) %>%
+  dplyr::select(Term = term, `Odds ratio`)
+
+
+# seems there's sensitivity to the data chosen when estimating the effect of
+# payroll and education group. perhaps running a bootstrap on the regression
+# can help get to the bottom
+
+library(boot)  
+
+logit_test <- function(d,indices) {  
+  d <- d[indices,]  
+  fit <- glm(vacc_pos ~ edu_gp + payroll,
+             data = d, family = "binomial")  
+  return(coef(fit))  
+}
+
+boot_fit <- boot(  
+  data = hcw.data, 
+  statistic = logit_test, 
+  R = 2e3
+) 
+
+boot_estimates <- data.frame(estimate = boot_fit$t0) %>%
+  mutate(term = rownames(.))
+
+boot_cis <- data.frame(x=1:4) %>%
+  split(.$x) %>%
+  purrr::map(~boot.ci(boot_fit, index = .x$x)) %>% 
+  purrr::map("normal") %>%
+  purrr::map_df(~as.data.frame(.x)) 
+
+bind_cols(boot_estimates, boot_cis) %>%
+  dplyr::rename(conf.low = V2,
+                conf.high = V3) %>%
+  dplyr::filter(term != "(Intercept)") %>%
+  dplyr::mutate_at(.vars = vars(estimate, conf.low, conf.high),
+                   .funs = exp) %>%
+  dplyr::select(term, estimate, conf.low, conf.high ) %>%
   dplyr::mutate(term = gsub(pattern = "(\\(|\\))", 
                             replacement = "",
                             x = term),
