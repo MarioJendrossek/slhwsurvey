@@ -664,6 +664,7 @@ boot_cis <- data.frame(x=1:4) %>%
   purrr::map("normal") %>%
   purrr::map_df(~as.data.frame(.x)) 
 
+# should really make this term clean-up into a function
 bind_cols(boot_estimates, boot_cis) %>%
   dplyr::rename(conf.low = V2,
                 conf.high = V3) %>%
@@ -688,3 +689,17 @@ bind_cols(boot_estimates, boot_cis) %>%
   dplyr::mutate(`Odds ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
                                        estimate, conf.low, conf.high)) %>%
   dplyr::select(Term = term, `Odds ratio`)
+
+
+# do we need regularised logistic regression?
+# standard errors will be a bit off but it can at least help identify what's
+# going on
+
+library(glmnet)
+
+sentiment_glmnet <- glmnet(x = dplyr::select(hcw.data.forsent,
+                                                 -vacc_pos) %>%
+                                 as.matrix,
+                               y = hcw.data.forsent$vacc_pos,
+                               family = "binomial")
+
