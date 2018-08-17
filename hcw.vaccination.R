@@ -3,179 +3,108 @@ require(RColorBrewer)
 require(nnet)
 require(aod)
 
-# prepare color pallettes
-display.brewer.pal(n = 3, name = 'RdBu')
-display.brewer.pal(n = 5, name = 'RdBu')
-pal3 <- brewer.pal(n = 3, name = "RdBu")
-pal4 <- brewer.pal(n = 4, name = "RdBu")
-pal5 <- brewer.pal(n = 5, name = "RdBu")
-pal6 <- brewer.pal(n = 6, name = "RdBu")
+# we're carrying the data over from hcw.minimal.turnover.R
 
 # C) +++++ vaccine acceptance++++++
 # +++++++ 1| CRUDE ANALYSIS ++++++++
 table(hcw.data$vacc_op) # 232 good opinion, 20 changed mind with info, 41 dont know, 11 negative opinion
 table(hcw.data$vacc_pos) # 232 good op (76%), 72 not entirely positive
 
+# tidy counting
+dplyr::count(hcw.data, vacc_op)
+dplyr::count(hcw.data, vacc_pos)
+
 # make vacc_op with 3 levels
-hcw.data$vacc_op[hcw.data$vacc_op==1| hcw.data$vacc_op==2] <- 1
-hcw.data$vacc_op[hcw.data$vacc_op==3] <- 2
-
-
+# hcw.data$vacc_op[hcw.data$vacc_op==1| hcw.data$vacc_op==2] <- 1
+# hcw.data$vacc_op[hcw.data$vacc_op==3] <- 2
 
 # factors associated with acceptance
-chisq.test(hcw.data$vacc_pos, hcw.data$sex) # not associated with sex
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$age_gp)) # not associated with age
-chisq.test(hcw.data$vacc_pos, hcw.data$rel) # not associated with rel
-chisq.test(hcw.data$vacc_pos, hcw.data$ethnic_gp) # not associated with rel
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$ethnic_gp)) # not associated with age
-chisq.test(hcw.data$vacc_pos, hcw.data$district) # not associated with district
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$health_ctr_type)) # not associated with health ctr type
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$ses_gp)) # not associated with ses_gp
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$prof_gp)) # not associated with prof group
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$profession)) # not associated with prof
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$edu_gp)) # somewhat associated with edu (but most acceptance in group 2)
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$ebola_contact_yn)) # not associated with contact
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$ebola_hcw_yn)) # associated with work exp (but negative)
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$payroll)) # associated payroll (but negative): on payroll have worse outcome
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$full_time)) # not associated with full-time
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$income_gp)) # associated with income group
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$hh_tv)) # not associated with tv
-chisq.test(hcw.data$vacc_pos, as.factor(hcw.data$hh_radio)) # not associated with radio
+hcw.factors <- c("sex",
+                 "age_gp",
+                 "rel",
+                 "ethnic_gp",
+                 "district",
+                 "health_ctr_type",
+                 "ses_gp",
+                 "prof_gp",
+                 "profession",
+                 "urban",
+                 "edu_gp",
+                 "ebola_contact_yn",
+                 "ebola_hcw_yn",
+                 "payroll",
+                 "hc_type_gp",
+                 "full_time",
+                 "income_gp",
+                 "hh_tv",
+                 "hh_radio")
+
+hcw.data.long <- 
+  hcw.data %>%
+  dplyr::select(one_of(hcw.factors), vacc_pos) %>%
+  mutate(row = row_number()) %>%
+  tidyr::gather(key, value, -row, -vacc_pos)
+
+# chi square tests
+hcw.data.long %>%
+  na.omit %>%
+  split(.$key) %>%
+  purrr::map(~chisq.test(.$vacc_pos, .$value)) %>%
+  purrr::map_df(~data.frame(p.value = .x$p.value), .id="key") %>%
+  dplyr::arrange(p.value)
 
 # crude ORs
-# 1. sex
-crude1 <- glm(family = binomial(), hcw.data$vacc_pos~hcw.data$sex)
-summary(crude1)
-exp(coef(crude1)) 
-exp(confint(crude1))
 
-# 2. age
-crude2 <- glm(family = binomial(), hcw.data$vacc_pos~relevel(as.factor(hcw.data$age_gp), ref="2"))
-summary(crude2)
-exp(coef(crude2)) 
-exp(confint(crude2))
+hcw.glm.data.long <- hcw.data.long %>%
+  na.omit %>%
+  split(.$key) %>% 
+  purrr::map(~glm(family = binomial(),
+                  data = .x, 
+                  vacc_pos ~ value)) %>%
+  purrr::map_df(~tidy(.x, conf.int=T), .id="key") %>%
+  dplyr::select(key, term, estimate, p.value, conf.low, conf.high) %>%
+  tidyr::gather(parameter, value, -c(key, term, p.value)) %>%
+  dplyr::mutate(value = case_when(term == "(Intercept)" ~ inv.logit(value),
+                                  TRUE ~ exp(value))) %>%
+  tidyr::spread(parameter, value) %>%
+  dplyr::mutate(value = sprintf("%.2f (%.2f, %.2f)", 
+                                estimate, conf.low, conf.high)) %>%
+  dplyr::select(key, term, p.value, value)
 
-# Wald test
-wald.test(b = coef(crude2), Sigma = vcov(crude2), Terms = 2:5)
+# convert the intercepts to a small data frame
+hcw.glm.data.long.intercepts <- 
+  dplyr::filter(hcw.glm.data.long, term == "(Intercept)") %>%
+  dplyr::rename(`Baseline probability` = "value") %>%
+  dplyr::select(-p.value, -term)
 
-# 3. Edu group
-crude3 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$edu_gp))
-summary(crude3)
-exp(coef(crude3)) 
-exp(confint(crude3))
+# convert the effects to something we can join with the intercepts
+hcw.glm.data.long.effects <- 
+  dplyr::filter(hcw.glm.data.long, term != "(Intercept)") %>%
+  dplyr::mutate(term = gsub(pattern = "value", 
+                            replacement = "",
+                            x = term))
 
-# Wald test
-wald.test(b = coef(crude3), Sigma = vcov(crude3), Terms = 2:3)
+first_only <- function(x){
+  if (!all(x == x[1])){stop("Not all elements the same")}
+  x[-1] <- ""
+  return(x)
+}
 
-# 4. District
-crude4 <- glm(family = binomial(), hcw.data$vacc_pos~hcw.data$district)
-summary(crude4)
-exp(coef(crude4)) 
-exp(confint(crude4))
-
-# 5. Payroll
-crude5 <- glm(family = binomial(), hcw.data$vacc_pos~hcw.data$payroll)
-summary(crude5)
-exp(coef(crude5)) 
-exp(confint(crude5))
-
-# 6. HCW ebola
-crude6 <- glm(family = binomial(), hcw.data$vacc_pos~hcw.data$ebola_hcw_yn)
-summary(crude6)
-exp(coef(crude6)) 
-exp(confint(crude6))
-
-# 7. SES 
-crude7 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$ses_gp))
-summary(crude7)
-exp(coef(crude7)) 
-exp(confint(crude7))
-
-# Wald test
-wald.test(b = coef(crude7), Sigma = vcov(crude7), Terms = 2:3)
-
-# 8. Income
-crude8 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$income_gp))
-summary(crude8)
-exp(coef(crude8)) 
-exp(confint(crude8))
-
-# Wald test
-wald.test(b = coef(crude8), Sigma = vcov(crude8), Terms = 2:3)
-
-# 9. rel
-crude9 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$rel))
-summary(crude9)
-exp(coef(crude9)) 
-exp(confint(crude9))
-
-# 10. ethnic group
-crude10 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$ethnic_gp))
-summary(crude10)
-exp(coef(crude10)) 
-exp(confint(crude10))
-
-# Wald test
-wald.test(b = coef(crude10), Sigma = vcov(crude10), Terms = 2:9)
-
-# 11. prof gp
-crude11 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$prof_gp))
-summary(crude11)
-exp(coef(crude11)) 
-exp(confint(crude11))
-
-# Wald test
-wald.test(b = coef(crude11), Sigma = vcov(crude11), Terms = 2:4)
-
-# 12. income gp
-crude12 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$income_gp))
-summary(crude12)
-exp(coef(crude12)) 
-exp(confint(crude12))
-
-# Wald test
-wald.test(b = coef(crude12), Sigma = vcov(crude12), Terms = 2:3)
-
-# 13. full-time
-crude13 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$full_time))
-summary(crude13)
-exp(coef(crude13)) 
-exp(confint(crude13))
-
-# 14. Ebola contact
-crude14 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$ebola_contact_yn))
-summary(crude14)
-exp(coef(crude14)) 
-exp(confint(crude14))
-
-# 15. TV
-crude15 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$hh_tv))
-summary(crude15)
-exp(coef(crude15)) 
-exp(confint(crude15))
-
-# 16. Radio
-crude16 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$hh_radio))
-summary(crude16)
-exp(coef(crude16)) 
-exp(confint(crude16))
-
-# 17. break?/num hc? risks?
-
-#18. urban
-table(hcw.data$urban, hcw.data$vacc_pos)
-crude18 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$urban))
-summary(crude18)
-exp(coef(crude18)) 
-exp(confint(crude18))
-
-#19. Hc type
-table(hcw.data$hc_type_gp, hcw.data$vacc_pos)
-crude19 <- glm(family = binomial(), hcw.data$vacc_pos~as.factor(hcw.data$hc_type_gp))
-summary(crude19)
-exp(coef(crude19)) 
-exp(confint(crude19))
-wald.test(b = coef(crude19), Sigma = vcov(crude19), Terms = 2:4)
+# join together, fix formatting
+inner_join(hcw.glm.data.long.intercepts, 
+           hcw.glm.data.long.effects) %>%
+  dplyr::mutate(p.value = sprintf("%.3f", p.value)) %>%
+  dplyr::select(`Covariate` = key,
+                `Baseline probability`, 
+                Level = term, 
+                `Odds ratio` = value,
+                `p value` = p.value) %>%
+  split(.$Covariate) %>%
+  purrr::map_df(~dplyr::mutate_at(.x,
+                               .vars = vars(Covariate,
+                                            `Baseline probability`),
+                               .funs = first_only)) %>%
+  write_csv("Figures\\oddsratios.csv")
 
 # +++++++ 2| ADJUSTED  regression (for positive attitude on vacc: vacc_pos) ++++++
 mod1 <- glm(hcw.data$vacc_pos ~ hcw.data$sex + relevel(as.factor(hcw.data$age_gp), ref = "2") + as.factor(hcw.data$prof_gp) +  as.factor(hcw.data$edu_gp)  + hcw.data$payroll + as.factor(hcw.data$income_gp) + hcw.data$ebola_hcw_yn, family=binomial(link='logit'))
