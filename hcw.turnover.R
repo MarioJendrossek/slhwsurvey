@@ -522,11 +522,17 @@ for(t in (1:20)) {
 
 # plot immunisation coverage over t
 par(mfrow=c(1,1), las=1)
-plot(x=1:20, y=coverage, col=pal5[5], xlab = "Time since vaccination campaign (years)", ylab="immunisation coverage (%)", pch=15)
+plot(x=1:20, y=coverage, col=pal5[5], 
+     xlab = "Time since vaccination campaign (years)", 
+     ylab="immunisation coverage (%)", pch=15,
+     ylim = c(0,1))
 points(x=0:19, y=coverage_high, col=pal5[1], pch=15)
 
 par(mfrow=c(1,1), las=1)
-plot(x=0:19, y=coverage, col=pal5[5], xlab = "Time since vaccination campaign (years)", ylab="immunisation coverage (%)", pch=15)
+plot(x=0:19, y=coverage, col=pal5[5],
+     xlab = "Time since vaccination campaign (years)",
+     ylab="immunisation coverage (%)", pch=15,
+     ylim = c(0,1))
 points(x=0:19, y=coverage_waning, col=pal5[1], pch=15)
 
 
