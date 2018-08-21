@@ -11,6 +11,7 @@ library(matrixStats)
 require(fitdistrplus)
 require(ggplot2)
 require(gamlss)
+require(aod)
 
 
 # prepare color pallettes
@@ -521,6 +522,7 @@ for(t in (1:20)) {
 }
 
 # plot immunisation coverage over t
+pdf("figures/model_coverage.pdf", height = 7, width = 8)
 par(mfrow=c(1,1), las=1)
 plot(x=1:20, y=coverage, col=pal5[5], 
      xlab = "Time since vaccination campaign (years)", 
@@ -534,7 +536,7 @@ plot(x=0:19, y=coverage, col=pal5[5],
      ylab="immunisation coverage (%)", pch=15,
      ylim = c(0,1))
 points(x=0:19, y=coverage_waning, col=pal5[1], pch=15)
-
+dev.off()
 
 # initial coverage
 # main model
