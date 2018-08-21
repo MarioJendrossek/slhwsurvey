@@ -78,7 +78,8 @@ tidy(sentiment_restricted, conf.int=T) %>%
                 term = fct_inorder(term)) %>%
   dplyr::mutate(`Odds ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
                                        estimate, conf.low, conf.high)) %>%
-  dplyr::select(Term = term, `Odds ratio`)
+  dplyr::select(Term = term, `Odds ratio`) %>%
+  write_csv("Figures/full_model_or.csv")
 
 
 # seems there's sensitivity to the data chosen when estimating the effect of
@@ -101,7 +102,7 @@ boot_fit <- boot(
 ) 
 
 boot_estimates <- data.frame(estimate = boot_fit$t0) %>%
-  mutate(term = rownames(.))
+  dplyr::mutate(term = rownames(.))
 
 boot_cis <- data.frame(x=1:4) %>%
   split(.$x) %>%
