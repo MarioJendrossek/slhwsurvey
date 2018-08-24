@@ -1,14 +1,11 @@
-# minimal script for Sam
+# script contains the code necessary to replicate the analysis of the paper
 
 # Turnover script
-
+set.seed(91)
 library(conflicted)
+library(tidyverse)
 library(RColorBrewer)
 library(boot)
-library(matrixStats)
-library(fitdistrplus)
-library(tidyverse)
-library(gamlss)
 library(magrittr)
 library(broom)
 
@@ -27,14 +24,18 @@ likely_factor <- function(x){
   
   return(status)
   
-  # all(is.integer(x), na.rm = T) & (min(x, na.rm=T) ==  1)
 }
 
+# urban is stored as 0/1 instead of 1/2
+# convert it and then turn likely factors into actual factors
+# num_hc is a count variable though
 hcw.data %<>% 
   dplyr::mutate(urban = as.integer(urban + 1)) %>%
   dplyr::mutate_if(.predicate = likely_factor,
                    .funs = factor) %>%
   dplyr::mutate(num_hc = parse_integer(num_hc))
+
+# select which variables we need for the regression
 
 hcw.data.forreg <- hcw.data %>%
   dplyr::select(
@@ -51,7 +52,7 @@ hcw.data.forreg <- hcw.data %>%
     income_gp,
     payroll,
     ethnic_gp,
-    health_ctr_type ,
+    hc_type_gp,
     full_time
   ) %>%
   na.omit
@@ -60,7 +61,6 @@ hcw.data.forreg <- hcw.data %>%
 # 1. Duration current job
 
 # summary statistics
-
 hcw.data %>%
   dplyr::select(`In current job` = duration_job, 
                 `As health care worker` = duration_hcw) %>%
@@ -75,7 +75,6 @@ hcw.data %>%
                                    Max = max))
 
 # who has the longest duration
-
 hcw.data %>%
   dplyr::select(`In current job` = duration_job, 
                 `As health care worker` = duration_hcw,
@@ -85,7 +84,8 @@ hcw.data %>%
   dplyr::filter(value == max(value, na.rm=TRUE)) %>%
   ungroup %>%
   dplyr::select(X1) %>%
-  inner_join(hcw.data)
+  inner_join(hcw.data) %>%
+  dplyr::select(X1, duration_hcw, duration_job)
 
 
 
@@ -101,7 +101,7 @@ hcw.data %>%
   purrr::map(~MASS::fitdistr(.x$value,
                              densfun = "gamma")) %>%
   purrr::map_df(~bind_cols(
-    tidy(.x),
+    tidy(.x, conf.int = TRUE),
     as.data.frame(confint(.x))),
     .id="Duration") %>%
   write_csv("Figures\\distribution_parameters.csv")
@@ -111,7 +111,7 @@ x_values <- seq(0,
                 ceiling(max(hcw.data$duration_hcw, na.rm=T)),
                 by = 1.25) + 0.5
 
-# plot with uncertainty
+# plot Gamma distribution of durations with uncertainty
 distribution_bounds <- hcw.data %>%
   dplyr::select(`In current job` = duration_job, 
                 `As health care worker` = duration_hcw) %>%
@@ -174,9 +174,13 @@ p_duration <- p_duration +
             aes(x=x, y=y),
             lty=2)
 
-ggsave(filename = "Figures\\duration.png",
-       width = 15, height = 7.5, units = "cm", dpi = 600,
-       plot = p_duration)
+list(`pdf` = "pdf",
+     `png` = "png") %>%
+  map(~ggsave(filename = paste("Figures\\Figure_2_duration",.x, sep="."),
+              width = 15, height = 7.5, units = "cm",
+              dpi = 600,
+              device = .x,
+              plot = p_duration))
 
 # sam's modelling
 
@@ -208,25 +212,31 @@ ecdf_predictions <- function(object){
   
 }
 
-# make plots showing goodness of fit
-ecdf_predictions(glm_dur_job) + xlab("Duration of current job (years)")
-ecdf_predictions(glm_dur_hcw) + xlab("Duration of career as health care worker (years)")
-
-# # analysis of deviance tables
-# anova(glm_dur_job)
-# anova(glm_dur_hcw)
-
 # drop variables not explaining variation
-glm_dur_job_step <- stepAIC(glm_dur_job)
-glm_dur_hcw_step <- stepAIC(glm_dur_hcw)
+glm_dur_job_step <- MASS::stepAIC(glm_dur_job, trace = FALSE)
+glm_dur_hcw_step <- MASS::stepAIC(glm_dur_hcw, trace = FALSE)
 
-# new goodness of fit plots showing
-ecdf_predictions(glm_dur_job_step) + xlab("Duration of current job (years)")
-ecdf_predictions(glm_dur_hcw_step) + xlab("Duration of career as health care worker (years)")
+diagnostics <- FALSE
 
-# summaries of confidence intervals
-tidy(glm_dur_job_step, conf.int=T)
-tidy(glm_dur_hcw_step, conf.int=T)
+if (diagnostics){
+  
+  # make plots showing goodness of fit
+  ecdf_predictions(glm_dur_job) + xlab("Duration of current job (years)")
+  ecdf_predictions(glm_dur_hcw) + xlab("Duration of career as health care worker (years)")
+  
+  # # analysis of deviance tables
+  # anova(glm_dur_job)
+  # anova(glm_dur_hcw)
+  
+  # new goodness of fit plots showing
+  ecdf_predictions(glm_dur_job_step) + xlab("Duration of current job (years)")
+  ecdf_predictions(glm_dur_hcw_step) + xlab("Duration of career as health care worker (years)")
+  
+  # summaries of confidence intervals
+  tidy(glm_dur_job_step, conf.int=T)
+  tidy(glm_dur_hcw_step, conf.int=T)
+}
+
 
 mod_list <- list(`As health care worker` = glm_dur_hcw_step,
                  `In current job` = glm_dur_job_step)
@@ -251,7 +261,7 @@ mod_list %>%
   dplyr::mutate(CI = sprintf("%0.2f (%0.2f, %0.2f)",
                              Estimate, conf.low, conf.high)) %>%
   dplyr::select(-c(Estimate, conf.low, conf.high)) %>%
-  write_csv("Figures\\parameters.csv")
+  write_csv("Figures\\Table_4_Duration_Parameters.csv")
 
 
 p_parameters <- mod_list %>%
@@ -282,9 +292,13 @@ p_parameters <- mod_list %>%
   ylab("Parameter value\n(link scale)") +
   xlab("Parameter label")
 
-ggsave(filename = "Figures\\parameters.png",
-       width = 15, height = 7.5, units = "cm", dpi = 600,
-       plot = p_parameters)
+list(`pdf` = "pdf",
+     `png` = "png") %>%
+  map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters",.x, sep="."),
+              width = 15, height = 7.5, units = "cm",
+              dpi = 600,
+              device = .x,
+              plot = p_parameters))
 
 # remember that the link function for the gamma family is the inverse
 # i.e. g(mu) = 1/mu
@@ -292,14 +306,11 @@ ggsave(filename = "Figures\\parameters.png",
 # and a positive parameter indicates a decrease in outcome
 
 
-
-
 # C| density function gamma
 set.seed(2018)
 
 HCW_values <- hcw.data %>%
   pull(duration_hcw) %>%
-  #tidyr::gather(key, value) %>%
   na.omit %>%
   MASS::fitdistr(.,
                  densfun = "gamma") 
@@ -353,8 +364,7 @@ HCW_simulation <- parms_mat %>%
       TRUE ~ "High (50%)"),
     Waning = fct_inorder(Waning))
 
-windows()
-HCW_simulation %>% 
+p_simulation <- HCW_simulation %>% 
   dplyr::filter(time <= 10) %>%
   group_by(acceptance, Waning, reach, efficacy, time, label) %>%
   dplyr::summarise(lo = quantile(coverage, 0.025),
@@ -382,3 +392,10 @@ HCW_simulation %>%
                 x = x,
                 y = y))
 
+list(`pdf` = "pdf",
+     `png` = "png") %>%
+  map(~ggsave(filename = paste("Figures\\Figure_4_Simulated_Coverage",.x, sep="."),
+              width = 15, height = 15, units = "cm",
+              dpi = 600,
+              device = .x,
+              plot = p_simulation))
