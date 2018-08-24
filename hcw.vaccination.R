@@ -1,7 +1,7 @@
 # Vaccine acceptance
-require(RColorBrewer)
-require(nnet)
-require(aod)
+# require(RColorBrewer)
+# require(nnet)
+# require(aod)
 
 # we're carrying the data over from hcw.minimal.turnover.R
 
@@ -24,7 +24,6 @@ hcw.factors <- c("sex",
                  "rel",
                  "ethnic_gp",
                  "district",
-                 "health_ctr_type",
                  "ses_gp",
                  "prof_gp",
                  "profession",
@@ -46,6 +45,7 @@ hcw.data.long <-
   tidyr::gather(key, value, -row, -vacc_pos)
 
 # chi square tests
+# which variables might be associated?
 hcw.data.long %>%
   na.omit %>%
   split(.$key) %>%
@@ -54,6 +54,7 @@ hcw.data.long %>%
   dplyr::arrange(p.value)
 
 # crude ORs
+# fit a logistic GLM to each of the variables above and see if there's a relationship
 
 hcw.glm.data.long <- hcw.data.long %>%
   na.omit %>%
@@ -74,7 +75,7 @@ hcw.glm.data.long <- hcw.data.long %>%
 # convert the intercepts to a small data frame
 hcw.glm.data.long.intercepts <- 
   dplyr::filter(hcw.glm.data.long, term == "(Intercept)") %>%
-  dplyr::rename(`Baseline probability ` = "value") %>%
+  dplyr::rename(`Baseline probability` = "value") %>%
   dplyr::select(-p.value, -term)
 
 # convert the effects to something we can join with the intercepts
@@ -84,6 +85,7 @@ hcw.glm.data.long.effects <-
                             replacement = "",
                             x = term))
 
+# want to display the table without having the intercept repeated for every row
 first_only <- function(x){
   if (!all(x == x[1])){stop("Not all elements the same")}
   x[-1] <- ""
@@ -94,8 +96,7 @@ first_only <- function(x){
 inner_join(hcw.glm.data.long.intercepts, 
            hcw.glm.data.long.effects) %>%
   dplyr::mutate(p.value = sprintf("%.3f", p.value)) %>%
-  dplyr::select(`Covariate` = key,
-                `Baseline probability`, 
+  dplyr::rename(`Covariate` = key,
                 Level = term, 
                 `Odds ratio` = value,
                 `p value` = p.value) %>%
@@ -104,47 +105,8 @@ inner_join(hcw.glm.data.long.intercepts,
                                .vars = vars(Covariate,
                                             `Baseline probability`),
                                .funs = first_only)) %>%
-  write_csv("Figures\\oddsratios.csv")
-
-# +++++++ 2| ADJUSTED  regression (for positive attitude on vacc: vacc_pos) ++++++
-mod1 <- glm(hcw.data$vacc_pos ~ hcw.data$sex + relevel(as.factor(hcw.data$age_gp), ref = "2") + as.factor(hcw.data$prof_gp) +  as.factor(hcw.data$edu_gp)  + hcw.data$payroll + as.factor(hcw.data$income_gp) + hcw.data$ebola_hcw_yn, family=binomial(link='logit'))
-summary(mod1)
-exp(coef(mod1)) # exponentiated coefficients
-exp(confint(mod1))
-wald.test(b = coef(mod1), Sigma = vcov(mod1), Terms = 3:6)
-wald.test(b = coef(mod1), Sigma = vcov(mod1), Terms = 7:9)
-wald.test(b = coef(mod1), Sigma = vcov(mod1), Terms = 10:11)
-wald.test(b = coef(mod1), Sigma = vcov(mod1), Terms = 13:14)
-
-# corrplot
-#vars <- c("hcw.data$sex", "hcw.data$age_gp", "hcw.data$prof_gp", "hcw.data$edu_gp", "hcw.data$payroll" +" hcw.data$income_gp" + "hcw.data$ebola_hcw_yn")
-# correlations <- cor(hcw.data[,c(1,3,5,6,7,8,9,10,11,13,14,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34)])
-# corrplot(correlations, method="circle")
+  write_csv("Figures\\Table_2_Univariate_GLM_Odds_ratios.csv")
 
 
-# MULTINOMIAL LOGRn
-# associations with vacc_op
-
-hcw.data %>%
-  dplyr::select(one_of(hcw.factors), vacc_op) %>%
-  mutate(row = row_number()) %>%
-  tidyr::gather(key, value, -row, -vacc_op) %>%
-  na.omit %>%
-  split(.$key) %>%
-  purrr::map(~chisq.test(.$vacc_op, .$value)) %>%
-  purrr::map_df(~data.frame(p.value = .x$p.value), .id="key") %>%
-  dplyr::arrange(p.value)
-
-# income seems to be the only variable potentially associated
-
-
-multinom.mod <- multinom(hcw.data$vacc_op ~  hcw.data$sex + relevel(as.factor(hcw.data$age_gp), ref="2") + as.factor(hcw.data$income_gp)  +  hcw.data$payroll + hcw.data$ebola_hcw_yn)
-summary(multinom.mod)
-z <- summary(multinom.mod)$coefficients/summary(multinom.mod)$standard.errors
-p <- (1 - pnorm(abs(z), 0, 1)) * 2
-p
-
-
-# MULTINOMIAL REGRESSION IDEAL BUT Sample size not big enough
 
 # check hcw.sentiment.modelling for sam's logistic regression approaches

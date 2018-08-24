@@ -59,6 +59,7 @@ sentiment_restricted <- glm(data = hcw.data.forsent,
                             vacc_pos ~ payroll + edu_gp,
                             family = binomial())
 
+# pull the intercept by itself
 sentiment_intercept <- tidy(sentiment_restricted, conf.int=T) %>%
   dplyr::filter(term == "(Intercept)") %>%
   dplyr::mutate_at(.vars = vars(estimate, conf.low, conf.high),
@@ -66,6 +67,10 @@ sentiment_intercept <- tidy(sentiment_restricted, conf.int=T) %>%
   dplyr::transmute(`Baseline probability` = sprintf("%0.2f (%0.2f, %0.2f)",
                                                     estimate, conf.low, conf.high))
 
+# extract odds ratios
+# tidy up the column values
+# include the intercept
+# write out the table
 tidy(sentiment_restricted, conf.int=T) %>%
   dplyr::filter(term != "(Intercept)") %>%
   dplyr::mutate_at(.vars = vars(estimate, conf.low, conf.high),
@@ -90,6 +95,6 @@ tidy(sentiment_restricted, conf.int=T) %>%
   dplyr::select(Term = term, `Odds ratio`) %>%
   cbind(., sentiment_intercept) %>%
   dplyr::select(Term, `Baseline probability`, `Odds ratio`) %>%
-  write_csv("Figures/Table_3_GLM_Odds_ratios.csv")
+  write_csv("Figures/Table_3_Multivariate_GLM_Odds_ratios.csv")
 
 
