@@ -106,6 +106,28 @@ hcw.data %>%
     .id="Duration") %>%
   write_csv("Figures\\distribution_parameters.csv")
 
+# stratify by type of job
+
+hcw.data %>%
+  dplyr::select(`In current job` = duration_job, 
+                `As health care worker` = duration_hcw,
+                `Profession` = prof_gp) %>%
+  tidyr::gather(key, value, -Profession) %>%
+  na.omit %>%
+  split(list(.$key, .$Profession)) %>%
+  purrr::map(~MASS::fitdistr(.x$value,
+                             densfun = "gamma")) %>%
+  purrr::map_df(
+    ~bind_cols(tidy(.x),
+               as.data.frame(confint(.x))),
+    .id="Duration") %>%
+  separate(Duration, into=c("Duration", "prof_gp"), sep="\\.") %>%
+  ggplot(data=., aes(x = prof_gp, y=estimate)) +
+  geom_pointrange(aes(ymin = `2.5 %`,
+                      ymax = `97.5 %`)) +
+  facet_grid(Duration ~ term)
+
+# 
 
 x_values <- seq(0,
                 ceiling(max(hcw.data$duration_hcw, na.rm=T)),
@@ -193,7 +215,6 @@ glm_dur_hcw <- glm(data=hcw.data.forreg,
                    family = "Gamma")
 
 ecdf_predictions <- function(object){
-  
   object$model %>%
     dplyr::mutate(pred = predict.glm(object,
                                      type = "response")) %>%
@@ -212,9 +233,28 @@ ecdf_predictions <- function(object){
   
 }
 
+
+# roz's question on position interacting with sex
+roz <- TRUE
+
+if (roz){
+  glm_dur_job <- glm(data=hcw.data.forreg,
+                     formula = duration_job ~ . - duration_hcw + prof_gp*sex,
+                     family = "Gamma")
+  
+  glm_dur_hcw <- glm(data=hcw.data.forreg,
+                     formula = duration_hcw ~ . - duration_job + prof_gp*sex,
+                     family = "Gamma")
+}
+
+# end roz's question
+
+
+
 # drop variables not explaining variation
 glm_dur_job_step <- MASS::stepAIC(glm_dur_job, trace = FALSE)
 glm_dur_hcw_step <- MASS::stepAIC(glm_dur_hcw, trace = FALSE)
+
 
 diagnostics <- FALSE
 
@@ -241,47 +281,67 @@ if (diagnostics){
 mod_list <- list(`As health care worker` = glm_dur_hcw_step,
                  `In current job` = glm_dur_job_step)
 
-mod_list %>%
-  purrr::map_df(~tidy(.x, conf.int=T),
-                .id="Outcome") %>%
-  dplyr::mutate(term = gsub(pattern = "(\\(|\\))", 
+model_output_postprocessor <- function(x){
+  
+  # x a tidy data frame output by a model
+  
+  x %<>% mutate(Sex = case_when(grepl(pattern = "sex", x = term) ~ "Male",
+                                TRUE ~ "Baseline"))
+  
+  dplyr::mutate(x,
+                term = gsub(pattern = "(\\(|\\))", 
                             replacement = "",
                             x = term),
+                term = gsub(pattern = "payroll",
+                            fixed = T,
+                            replacement = "Volunteer",
+                            x = term),
                 term = gsub(pattern = "age_gp",
-                            fixed = T, replacement = "Age group ",
+                            fixed = T,
+                            replacement = "Age group ",
+                            x = term),
+                term = gsub(pattern = "prof_gp",
+                            fixed = T,
+                            replacement = "Profession group ",
                             x = term),
                 term = gsub(pattern = "(?<! )2$",
                             replacement = "\\1", perl=T,
                             x = term),
+                term = gsub(pattern = "sex2:",
+                            fixed = T,
+                            replacement = "",
+                            x = term),
                 term = stringr::str_to_title(term),
-                term = fct_inorder(term)) %>%
-  dplyr::select(Outcome, Term = term, 
-                Estimate = estimate,
-                conf.low, conf.high) %>%
+                
+                term = fct_inorder(term)
+  ) %>%
+    return(.)
+  
+}
+
+mod_parameters <- mod_list %>%
+  purrr::map(~tidy(.x, conf.int=T)) %>%
+  purrr::map_df(~model_output_postprocessor(.x),
+                .id="Outcome") %>%
+  dplyr::mutate(term = fct_inorder(term)) %>%
+  dplyr::rename(Term = term, 
+                Estimate = estimate)
+
+mod_parameters %>%
+  dplyr::select(one_of(c("Outcome", "Term", "conf.low", "conf.high", 
+                         "Estimate", "Sex"))) %>%
   dplyr::mutate(CI = sprintf("%0.2f (%0.2f, %0.2f)",
                              Estimate, conf.low, conf.high)) %>%
-  dplyr::select(-c(Estimate, conf.low, conf.high)) %>%
-  write_csv("Figures\\Table_4_Duration_Parameters.csv")
+  dplyr::select(-c(Estimate, conf.low, conf.high))
+
+write_csv(mod_parameters, "Figures\\Table_4_Duration_Parameters.csv")
 
 
-p_parameters <- mod_list %>%
-  purrr::map_df(~tidy(.x, conf.int=T),
-                .id="Outcome") %>%
-  dplyr::mutate(term = gsub(pattern = "(\\(|\\))", 
-                            replacement = "",
-                            x = term),
-                term = gsub(pattern = "age_gp",
-                            fixed = T, replacement = "Age group ",
-                            x = term),
-                term = gsub(pattern = "(?<! )2$",
-                            replacement = "\\1", perl=T,
-                            x = term),
-                term = stringr::str_to_title(term),
-                term = fct_inorder(term)) %>%
-  ggplot(data=., aes(x=term, y=estimate)) +
+p_parameters <- ggplot(data=mod_parameters,
+                       aes(x=Term, y=Estimate)) +
   geom_pointrange(aes(ymin = conf.low, 
                       ymax = conf.high,
-                      color = Outcome),
+                      color = Sex),
                   position = position_dodge(width=0.5)) +
   theme_bw() +
   theme(legend.position = "bottom",
@@ -289,13 +349,14 @@ p_parameters <- mod_list %>%
                                    hjust = 1,
                                    vjust = 1)) +
   geom_hline(yintercept = 0, lty=2) +
+  facet_grid(Outcome ~ .) +
   ylab("Parameter value\n(link scale)") +
   xlab("Parameter label")
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-  map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters",.x, sep="."),
-              width = 15, height = 7.5, units = "cm",
+  map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters_",.x, sep="."),
+              width = 15, height = 15, units = "cm",
               dpi = 600,
               device = .x,
               plot = p_parameters))
