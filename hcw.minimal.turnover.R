@@ -48,7 +48,7 @@ hcw.data.forreg <- hcw.data %>%
     urban,
     #num_hc, actually on causal pathway
     prof_gp,
-    #edu_gp,
+    #edu_gp, closely related to income and profession
     income_gp,
     payroll,
     ethnic_gp,
@@ -202,30 +202,12 @@ list(`pdf` = "pdf",
 
 
 
-ecdf_predictions <- function(object){
-  object$model %>%
-    dplyr::mutate(pred = predict.glm(object,
-                                     type = "response")) %>%
-    dplyr::select(Fitted = pred) %>%
-    dplyr::mutate(Observed = object$y) %>%
-    tidyr::gather(key = source, value = value) %>%
-    ggplot(data=., aes(x=value)) +
-    stat_ecdf(aes(color=factor(source))) +
-    scale_x_log10() +
-    scale_color_brewer(palette="Set2", name="Data source") +
-    ylab("ECDF") +
-    theme_bw() +
-    theme(legend.position = "bottom",
-          panel.grid.minor.x = element_blank()) +
-    annotation_logticks(sides="bt")
-  
-}
 
 
-# roz's question on position interacting with sex
-roz <- TRUE
+# are there any sex-profession interactions?
+interaction <- FALSE
 
-if (roz){
+if (interaction){
   glm_dur_job <- glm(data=hcw.data.forreg,
                      formula = duration_job ~ 
                        . - duration_hcw + prof_gp*sex,
@@ -245,30 +227,60 @@ if (roz){
                      family = "Gamma")
 }
 
-# end roz's question
-
-
-
 # drop variables not explaining variation
 glm_dur_job_step <- MASS::stepAIC(glm_dur_job, trace = FALSE)
 glm_dur_hcw_step <- MASS::stepAIC(glm_dur_hcw, trace = FALSE)
 
-
 diagnostics <- FALSE
+
+
+make_predictions <- function(object){
+  object$model %>%
+    dplyr::mutate(pred = predict.glm(object,
+                                     type = "response")) %>%
+    dplyr::select(Fitted = pred) %>%
+    dplyr::mutate(Observed = object$y) %>%
+    return
+}
+
+
+
+plot_ecdfs <- function(x){
+  x %>%
+    purrr::map_df(~make_predictions(.x) %>%
+                    dplyr::mutate(row = 1:n()),
+                  .id="Model") %>%
+    tidyr::spread(Model, Fitted) %>%
+    tidyr::gather(key = source, value = value, -row) %>%
+    ggplot(data=., aes(x=value)) +
+    stat_ecdf(aes(color=factor(source))) +
+    scale_x_log10() +
+    scale_color_brewer(palette="Set2", name="Data source") +
+    ylab("ECDF") +
+    theme_bw() +
+    theme(legend.position = "bottom",
+          panel.grid.minor.x = element_blank()) +
+    annotation_logticks(sides="bt")
+}
+
+
+diagnostics <- TRUE
 
 if (diagnostics){
   
   # make plots showing goodness of fit
-  ecdf_predictions(glm_dur_job) + xlab("Duration of current job (years)")
-  ecdf_predictions(glm_dur_hcw) + xlab("Duration of career as health care worker (years)")
+  job_plots <- list(`Full` = glm_dur_job,
+                    `Restricted` = glm_dur_job_step) %>%
+    plot_ecdfs(x= .) +
+    xlab("Duration in current job")
   
-  # # analysis of deviance tables
-  # anova(glm_dur_job)
-  # anova(glm_dur_hcw)
+  hcw_plots <-list(`Full` = glm_dur_hcw,
+       `Restricted` = glm_dur_hcw_step) %>%
+    plot_ecdfs(x= .) +
+    xlab("Duration as health care worker")
   
-  # new goodness of fit plots showing
-  ecdf_predictions(glm_dur_job_step) + xlab("Duration of current job (years)")
-  ecdf_predictions(glm_dur_hcw_step) + xlab("Duration of career as health care worker (years)")
+  dev.new()
+  gridExtra::grid.arrange(job_plots, hcw_plots, ncol=1)
   
   # summaries of confidence intervals
   tidy(glm_dur_job_step, conf.int=T)
@@ -276,15 +288,24 @@ if (diagnostics){
 }
 
 
-mod_list <- list(`As health care worker` = glm_dur_hcw_step,
+model_list <- list(`As health care worker` = glm_dur_hcw_step,
                  `In current job` = glm_dur_job_step)
 
 model_output_postprocessor <- function(x){
   
   # x a tidy data frame output by a model
   
-  x %<>% mutate(Sex = case_when(grepl(pattern = "sex", x = term) ~ "Male",
-                                TRUE ~ "Baseline"))
+  
+  
+  if (sum(grepl(pattern = "sex", x = x$term)) > 1){
+    x %<>% mutate(Sex = case_when(grepl(pattern = "sex", x = term) ~ "Male",
+                                  TRUE ~ "Baseline"),
+                  term = gsub(pattern = "sex2:",
+                              fixed = T,
+                              replacement = "",
+                              x = term)
+    )
+  }
   
   dplyr::mutate(x,
                 term = gsub(pattern = "(\\(|\\))", 
@@ -305,10 +326,6 @@ model_output_postprocessor <- function(x){
                 term = gsub(pattern = "(?<! )2$",
                             replacement = "\\1", perl=T,
                             x = term),
-                term = gsub(pattern = "sex2:",
-                            fixed = T,
-                            replacement = "",
-                            x = term),
                 term = stringr::str_to_title(term),
                 
                 term = fct_inorder(term)
@@ -317,29 +334,34 @@ model_output_postprocessor <- function(x){
   
 }
 
-mod_parameters <- mod_list %>%
+mod_parameters <- model_list %>%
   purrr::map(~tidy(.x, conf.int=T)) %>%
   purrr::map_df(~model_output_postprocessor(.x),
                 .id="Outcome") %>%
   dplyr::mutate(term = fct_inorder(term)) %>%
   dplyr::rename(Term = term, 
-                Estimate = estimate)
+                Estimate = estimate) %>%
+  dplyr::mutate(Term = fct_recode(Term,
+                                  "25-34" = "Age Group 2",
+                                  "35-44" = "Age Group 3",
+                                  "45-54" = "Age Group 4",
+                                  "55+"   = "Age Group 5",
+                                  "Male" = "Sex")) 
 
 mod_parameters %>%
   dplyr::select(one_of(c("Outcome", "Term", "conf.low", "conf.high", 
                          "Estimate", "Sex"))) %>%
   dplyr::mutate(CI = sprintf("%0.2f (%0.2f, %0.2f)",
                              Estimate, conf.low, conf.high)) %>%
-  dplyr::select(-c(Estimate, conf.low, conf.high))
-
-write_csv(mod_parameters, "Figures\\Table_4_Duration_Parameters.csv")
+  dplyr::select(-c(Estimate, conf.low, conf.high)) %>%
+  write_csv("Figures\\Table_4_Duration_Parameters.csv")
 
 
 p_parameters <- ggplot(data=mod_parameters,
-                       aes(x=Term, y=Estimate)) +
+                       aes(x=Term, y=Estimate,
+                           color = Outcome)) +
   geom_pointrange(aes(ymin = conf.low, 
-                      ymax = conf.high,
-                      color = Sex),
+                      ymax = conf.high),
                   position = position_dodge(width=0.5)) +
   theme_bw() +
   theme(legend.position = "bottom",
@@ -347,14 +369,13 @@ p_parameters <- ggplot(data=mod_parameters,
                                    hjust = 1,
                                    vjust = 1)) +
   geom_hline(yintercept = 0, lty=2) +
-  facet_grid(Outcome ~ .) +
   ylab("Parameter value\n(link scale)") +
   xlab("Parameter label")
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-  map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters_",.x, sep="."),
-              width = 15, height = 15, units = "cm",
+  map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters",.x, sep="."),
+              width = 15, height = 7.5, units = "cm",
               dpi = 600,
               device = .x,
               plot = p_parameters))
