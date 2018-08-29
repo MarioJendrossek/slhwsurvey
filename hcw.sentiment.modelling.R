@@ -13,8 +13,8 @@ hcw.data.forsent <- hcw.data %>%
     urban,
     #num_hc, actually on causal pathway
     prof_gp,
-    edu_gp,
-    income_gp,
+    #edu_gp,
+    #income_gp,
     payroll,
     ethnic_gp,
     hc_type_gp ,
@@ -33,15 +33,19 @@ sentiment_step <- MASS::stepAIC(sentiment,
 #k = log(nrow(hcw.data.forsent)))
 
 tidy(sentiment_step, conf.int=TRUE) %>%
+  model_output_postprocessor
+
+tidy(sentiment_step, conf.int=TRUE) %>%
   dplyr::filter(term != "(Intercept)") %>%
   dplyr::mutate_at(.vars = vars(estimate, conf.low, conf.high),
                    .funs = exp) %>%
+  model_output_postprocessor %>%
   dplyr::select(-std.error, -statistic) %>%
   dplyr::mutate(term = gsub(pattern = "(\\(|\\))", 
                             replacement = "",
                             x = term),
                 term = gsub(pattern = "_gp", 
-                            replacement = " group ",
+                            replacement = " group",
                             x = term),
                 term = gsub(pattern = "(?<! )2$",
                             replacement = "\\1", perl=T,
@@ -56,7 +60,7 @@ tidy(sentiment_step, conf.int=TRUE) %>%
   dplyr::select(Term = term, `Odds ratio`)
 
 sentiment_restricted <- glm(data = hcw.data.forsent,
-                            vacc_pos ~ payroll + edu_gp,
+                            vacc_pos ~ payroll ,
                             family = binomial())
 
 # pull the intercept by itself
