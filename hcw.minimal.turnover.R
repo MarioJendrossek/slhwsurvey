@@ -104,7 +104,7 @@ hcw.data %>%
     tidy(.x, conf.int = TRUE),
     as.data.frame(confint(.x))),
     .id="Duration") %>%
-  write_csv("Figures\\distribution_parameters.csv")
+  write_csv("Figures/distribution_parameters.csv")
 
 # stratify by type of job
 
@@ -186,13 +186,13 @@ p_duration <- p_duration +
   geom_ribbon(data = duration_bounds,
               aes(x=x, ymin = ymin, ymax = ymax),
               color=NA, fill="lightskyblue", alpha=0.5) +
-  geom_line(data= distribution_bounds,
+  geom_line(data= duration_bounds,
             aes(x=x, y=y),
             lty=2)
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-  map(~ggsave(filename = paste("Figures\\Figure_2_duration",.x, sep="."),
+  map(~ggsave(filename = paste("Figures/Figure_2_duration",.x, sep="."),
               width = 15, height = 7.5, units = "cm",
               dpi = 600,
               device = .x,
@@ -354,7 +354,7 @@ mod_parameters %>%
   dplyr::mutate(CI = sprintf("%0.2f (%0.2f, %0.2f)",
                              Estimate, conf.low, conf.high)) %>%
   dplyr::select(-c(Estimate, conf.low, conf.high)) %>%
-  write_csv("Figures\\Table_4_Duration_Parameters.csv")
+  write_csv("Figures/Table_4_Duration_Parameters.csv")
 
 
 p_parameters <- ggplot(data=mod_parameters,
@@ -374,7 +374,7 @@ p_parameters <- ggplot(data=mod_parameters,
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-  map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters",.x, sep="."),
+  map(~ggsave(filename = paste("Figures/Figure_3_Duration_Parameters",.x, sep="."),
               width = 15, height = 7.5, units = "cm",
               dpi = 600,
               device = .x,
