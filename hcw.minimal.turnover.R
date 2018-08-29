@@ -48,7 +48,7 @@ hcw.data.forreg <- hcw.data %>%
     urban,
     #num_hc, actually on causal pathway
     prof_gp,
-    edu_gp,
+    #edu_gp,
     income_gp,
     payroll,
     ethnic_gp,
@@ -108,7 +108,8 @@ hcw.data %>%
 
 # stratify by type of job
 
-hcw.data %>%
+duration_parameters <- 
+  hcw.data %>%
   dplyr::select(`In current job` = duration_job, 
                 `As health care worker` = duration_hcw,
                 `Profession` = prof_gp) %>%
@@ -116,7 +117,10 @@ hcw.data %>%
   na.omit %>%
   split(list(.$key, .$Profession)) %>%
   purrr::map(~MASS::fitdistr(.x$value,
-                             densfun = "gamma")) %>%
+                             densfun = "gamma"))
+
+
+duration_parameters %>%
   purrr::map_df(
     ~bind_cols(tidy(.x),
                as.data.frame(confint(.x))),
@@ -134,19 +138,9 @@ x_values <- seq(0,
                 by = 1.25) + 0.5
 
 # plot Gamma distribution of durations with uncertainty
-distribution_bounds <- hcw.data %>%
-  dplyr::select(`In current job` = duration_job, 
-                `As health care worker` = duration_hcw) %>%
-  tidyr::gather(key, value) %>%
-  na.omit %>%
-  split(.$key) %>%
-  purrr::map(
-    # estimate parameters of gamma distributions that 
-    # describe the shape of the data
-    ~MASS::fitdistr(.x$value,
-                    densfun = "gamma")) %>%
+duration_bounds <- duration_parameters %>%
   purrr::map(# sample parameters from MLE estimate
-    ~mvtnorm::rmvnorm(n = 1000,
+    ~mvtnorm::rmvnorm(n = 100,
                       mean = .x$estimate,
                       sigma = .x$vcov)) %>%
   purrr::map_df(
@@ -189,7 +183,7 @@ p_duration <- hcw.data %>%
 
 # add on the uncertainty bounds
 p_duration <- p_duration +
-  geom_ribbon(data = distribution_bounds,
+  geom_ribbon(data = duration_bounds,
               aes(x=x, ymin = ymin, ymax = ymax),
               color=NA, fill="lightskyblue", alpha=0.5) +
   geom_line(data= distribution_bounds,
@@ -206,13 +200,7 @@ list(`pdf` = "pdf",
 
 # sam's modelling
 
-glm_dur_job <- glm(data=hcw.data.forreg,
-                   formula = duration_job ~ . - duration_hcw,
-                   family = "Gamma")
 
-glm_dur_hcw <- glm(data=hcw.data.forreg,
-                   formula = duration_hcw ~ . - duration_job,
-                   family = "Gamma")
 
 ecdf_predictions <- function(object){
   object$model %>%
@@ -239,11 +227,21 @@ roz <- TRUE
 
 if (roz){
   glm_dur_job <- glm(data=hcw.data.forreg,
-                     formula = duration_job ~ . - duration_hcw + prof_gp*sex,
+                     formula = duration_job ~ 
+                       . - duration_hcw + prof_gp*sex,
                      family = "Gamma")
   
   glm_dur_hcw <- glm(data=hcw.data.forreg,
-                     formula = duration_hcw ~ . - duration_job + prof_gp*sex,
+                     formula = duration_hcw ~ 
+                       . - duration_job + prof_gp*sex,
+                     family = "Gamma")
+} else {
+  glm_dur_job <- glm(data=hcw.data.forreg,
+                     formula = duration_job ~ . - duration_hcw,
+                     family = "Gamma")
+  
+  glm_dur_hcw <- glm(data=hcw.data.forreg,
+                     formula = duration_hcw ~ . - duration_job,
                      family = "Gamma")
 }
 
@@ -367,96 +365,3 @@ list(`pdf` = "pdf",
 # and a positive parameter indicates a decrease in outcome
 
 
-# C| density function gamma
-set.seed(2018)
-
-HCW_values <- hcw.data %>%
-  pull(duration_hcw) %>%
-  na.omit %>%
-  MASS::fitdistr(.,
-                 densfun = "gamma") 
-
-HCW_samples <- mvtnorm::rmvnorm(n = 1000,
-                                mean = HCW_values$estimate,
-                                sigma = HCW_values$vcov) %>%
-  as.data.frame
-
-parms_mat <- expand.grid(acceptance = c(0.763, 0.964),
-                         waning = c(0, 0.1),
-                         reach = 1,
-                         efficacy = c(1, 0.75),
-                         time = seq(0,20, by = 0.25))
-
-coverage <- function(samples, parms){
-  
-  bind_cols(samples, parms[rep(1, nrow(samples)),]) %>%
-    dplyr::mutate(density_hcw = pgamma(q = time,
-                                       shape = .$shape,
-                                       rate = .$rate)) %>%
-    dplyr::mutate(acceptance_sampled = rbeta(
-      n = nrow(.),
-      shape1 = .$acceptance*304,
-      shape2 = (1 - .$acceptance)*304)) %>%
-    dplyr::mutate(
-      coverage = 
-        acceptance_sampled*reach*efficacy*((1-waning)^time)*(1-density_hcw)) %>%
-    return
-}
-
-HCW_simulation <- parms_mat %>%
-  dplyr::mutate(row = 1:n()) %>%
-  dplyr::mutate(label = 
-                  case_when(
-                    acceptance == 0.964 & efficacy == 1 ~ "A",
-                    acceptance == 0.964 & efficacy == 0.75 ~ "B",
-                    acceptance == 0.763 & efficacy == 1 ~ "C",
-                    acceptance == 0.763 & efficacy == 0.75 ~ "D")) %>%
-  split(.$row) %>%
-  purrr::map_df(~coverage(HCW_samples, .x), id="row") %>%
-  dplyr::mutate(efficacy = case_when(
-    efficacy == 1 ~ "High efficacy (100%)",
-    TRUE ~ "Low efficacy (75%)"),
-    acceptance = case_when(
-      acceptance == 0.964 ~ "High acceptance (96.4%)",
-      TRUE ~ "Low acceptance (76.3%)"),
-    Waning = case_when(
-      waning == 0 ~ "Low (0%)",
-      waning == 0.1 ~ "Medium (10%)",
-      TRUE ~ "High (50%)"),
-    Waning = fct_inorder(Waning))
-
-p_simulation <- HCW_simulation %>% 
-  dplyr::filter(time <= 10) %>%
-  group_by(acceptance, Waning, reach, efficacy, time, label) %>%
-  dplyr::summarise(lo = quantile(coverage, 0.025),
-                   med = median(coverage),
-                   hi = quantile(coverage, 0.975)) %>%
-  ungroup %>%
-  dplyr::mutate(Waning = fct_rev(Waning)) %>%
-  ggplot(data=., aes(x=time)) +
-  geom_ribbon(aes(ymin = lo, ymax = hi,
-                  fill = Waning),
-              alpha = 0.25) + 
-  geom_line(aes(y = med,
-                color = Waning)) +
-  facet_wrap( ~ label) +
-  theme_bw() +
-  theme(legend.position="bottom", 
-        strip.text = element_blank()) +
-  ylab("Immunisation coverage") +
-  scale_y_continuous(labels = scales::percent, 
-                     limits = c(0, 1)) +
-  guides(colour = guide_legend(override.aes = list(size=2))) +
-  xlab("Time since vaccination campaign (years)") +
-  geom_text(data = data.frame( x = 10, y=1, label=LETTERS[1:4]),
-            aes(label = label,
-                x = x,
-                y = y))
-
-list(`pdf` = "pdf",
-     `png` = "png") %>%
-  map(~ggsave(filename = paste("Figures\\Figure_4_Simulated_Coverage",.x, sep="."),
-              width = 15, height = 15, units = "cm",
-              dpi = 600,
-              device = .x,
-              plot = p_simulation))
