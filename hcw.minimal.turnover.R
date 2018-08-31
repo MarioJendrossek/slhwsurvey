@@ -104,7 +104,12 @@ hcw.data %>%
     tidy(.x, conf.int = TRUE),
     as.data.frame(confint(.x))),
     .id="Duration") %>%
-  write_csv("Figures\\distribution_parameters.csv")
+  dplyr::mutate(CI = sprintf("%0.2f (%0.2f, %0.2f)",
+                             estimate, `2.5 %`, `97.5 %`),
+                Parameter = case_when(term == "shape" ~ "alpha",
+                                      term == "rate" ~ "beta")) %>%
+  dplyr::select(Duration, Parameter, `Value (95% CI)` = CI) %>%
+  write_csv("Figures\\Table_2.5_Duration_Parameters.csv")
 
 # stratify by type of job
 
@@ -192,11 +197,11 @@ p_duration <- p_duration +
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-  map(~ggsave(filename = paste("Figures\\Figure_2_duration",.x, sep="."),
-              width = 15, height = 7.5, units = "cm",
-              dpi = 600,
-              device = .x,
-              plot = p_duration))
+  purrr::map(~ggsave(filename = paste("Figures\\Figure_2_duration",.x, sep="."),
+                     width = 15, height = 7.5, units = "cm",
+                     dpi = 600,
+                     device = .x,
+                     plot = p_duration))
 
 # sam's modelling
 
@@ -220,7 +225,7 @@ if (interaction){
 } else {
   glm_dur_job <- glm(data=hcw.data.forreg,
                      formula = duration_job ~ . - duration_hcw,
-                     family = "Gamma")
+                     family = Gamma())
   
   glm_dur_hcw <- glm(data=hcw.data.forreg,
                      formula = duration_hcw ~ . - duration_job,
@@ -264,8 +269,6 @@ plot_ecdfs <- function(x){
 }
 
 
-diagnostics <- TRUE
-
 if (diagnostics){
   
   # make plots showing goodness of fit
@@ -275,7 +278,7 @@ if (diagnostics){
     xlab("Duration in current job")
   
   hcw_plots <-list(`Full` = glm_dur_hcw,
-       `Restricted` = glm_dur_hcw_step) %>%
+                   `Restricted` = glm_dur_hcw_step) %>%
     plot_ecdfs(x= .) +
     xlab("Duration as health care worker")
   
@@ -289,7 +292,7 @@ if (diagnostics){
 
 
 model_list <- list(`As health care worker` = glm_dur_hcw_step,
-                 `In current job` = glm_dur_job_step)
+                   `In current job` = glm_dur_job_step)
 
 model_output_postprocessor <- function(x){
   
@@ -374,15 +377,92 @@ p_parameters <- ggplot(data=mod_parameters,
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-  map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters",.x, sep="."),
-              width = 15, height = 7.5, units = "cm",
-              dpi = 600,
-              device = .x,
-              plot = p_parameters))
+  purrr::map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters",.x, sep="."),
+                     width = 15, height = 7.5, units = "cm",
+                     dpi = 600,
+                     device = .x,
+                     plot = p_parameters))
 
 # remember that the link function for the gamma family is the inverse
 # i.e. g(mu) = 1/mu
 # so a negative parameter indicates an increase in outcome
 # and a positive parameter indicates a decrease in outcome
 
+# let's make predictions and scale by the baseline to see how the parameters affect what's going on
 
+make_duration_newdata <- function(obj){
+  
+  # obj a model
+  
+  # extract the unique values of the explanatory variables
+  # then use expand.grid to get all combinations
+  x <- obj$model %>%
+    dplyr::select(-1) %>%
+    dplyr::distinct(.) %>%
+    c(tidyselect::vars_select(names(.))) %>%
+    purrr::map(~levels(.x)) %>%
+    expand.grid %>%
+    dplyr::mutate(row = 1:n())
+  
+  # how many actual variables are there?
+  n_c <- ncol(x) - 1
+  
+  # drop rows from the data frame when they don't represent
+  # a change from baseline for only one variable, or the
+  # baseline itself
+  #
+  # nb this will break if we have interactions in the model
+  x %>%
+    tidyr::gather(key, value, -row) %>%
+    group_by(row) %>%
+    dplyr::summarise(n = sum(value == 1)) %>%
+    dplyr::filter(n >= n_c - 1) %>%
+    inner_join(x) %>%
+    dplyr::arrange(row) %>%
+    dplyr::select(-row) %>%
+    return
+  
+}
+
+
+purrr::map_df(.x = model_list,
+              .f = ~dplyr::bind_cols(
+                make_duration_newdata(.x), 
+                predict(.x,
+                        newdata = make_duration_newdata(.x), 
+                        type = "response", 
+                        se.fit = T) %>%
+                  data.frame),
+              .id = "Duration") %>%
+  # calculate confidence intervals
+  dplyr::mutate(lwr = fit - 1.96*se.fit,
+                upr = fit + 1.96*se.fit,
+                base = fit[1]) %>%
+  # scale by baseline
+  dplyr::mutate(fit = fit/base,
+                lwr = lwr/base,
+                upr = upr/base) %>%
+  # drop the intercept
+  dplyr::filter(n < max(n)) %>%
+  # combine the estimate and confidence bounds into one cell
+  dplyr::mutate(CI = sprintf("%0.2f (%0.2f, %0.2f)",
+                             fit, lwr, upr)) %>%
+  dplyr::select(-n, -base, -lwr, -upr) %>%
+  # and now filter out everything that is only 1s
+  gather(variable, value, -Duration, -CI) %>%
+  dplyr::filter(value != 1) %>%
+  # and now relabel so that they're human friendly names
+  dplyr::mutate(Variable = case_when(variable == "sex" ~ "Male",
+                                     variable == "payroll" ~ "Volunteer",
+                                     variable == "urban" ~ "Urban",
+                                     variable == "age_gp" ~ case_when(
+                                       value == "2" ~ "25-34",
+                                       value == "3" ~ "35-44",
+                                       value == "4" ~ "45-54",
+                                       value == "5" ~ "55+"
+                                     ))) %>%
+  # reshape to write as a wide format table
+  dplyr::select(Duration, Variable, CI) %>%
+  dplyr::mutate(Variable = fct_inorder(Variable)) %>%
+  tidyr::spread(Duration, CI) %>% 
+  write_csv(x = ., path = "Figures/Table_4_Odds_Ratio_for_Gamma_Regression.csv")
