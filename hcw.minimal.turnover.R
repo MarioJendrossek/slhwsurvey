@@ -429,10 +429,10 @@ make_duration_newdata <- function(obj){
 purrr::map_df(.x = model_list,
               .f = ~dplyr::bind_cols(
                   make_duration_newdata(.x), 
-                  predict(.x,
-                          newdata = make_duration_newdata(.x), 
-                          type = "response", 
-                          se.fit = T) %>%
+                  predict.glm(.x,
+                              newdata = make_duration_newdata(.x), 
+                              type = "response", 
+                              se.fit = T) %>%
                       data.frame),
               .id = "Duration") %>%
     dplyr::group_by(Duration) %>%
@@ -471,18 +471,119 @@ purrr::map_df(.x = model_list,
     tidyr::spread(Duration, CI) %>% 
     write_csv(x = ., path = "Figures/Table_4_Odds_Ratio_for_Gamma_Regression.csv")
 
+## simulate the durations so that we can take a comparison
 
-# can zelig simulate?
-library(Zelig)
+## this requires fitting with the Zelig package so that we can simulate from the fitted model
 
 zelig_dur_hcw <- zelig(data=hcw.data.forreg,
                        formula = duration_hcw ~ age_gp + payroll,
                        model = "gamma")
 
-Zelig::summary(zelig_dur_hcw)
-base::summary(glm_dur_hcw_step)
-# models are the same
+sims_newdata_hcw_df <- make_duration_newdata(glm_dur_hcw_step) %>%
+    dplyr::mutate(row = seq_along(age_gp))
 
-sim(zelig_dur_hcw, num=1, x = make_duration_newdata(glm_dur_hcw_step))
+sims_newdata_hcw <- setx(zelig_dur_hcw, 
+                     age_gp = sims_newdata_hcw_df$age_gp,
+                     payroll = sims_newdata_hcw_df$payroll)
+
+sims_zelig_hcw <- Zelig::sim(obj = zelig_dur_hcw,
+                         num = 1000,
+                         x = sims_newdata_hcw)
+
+sims_zelig_table_hcw <- sims_zelig_hcw$sim.out[[1]] %>%
+    map("ev") %>%
+    map_df(~data.frame(value = unlist(.x)) %>%
+               dplyr::mutate(sample = 1:n()),
+           .id = "row") %>%
+    dplyr::mutate_at(.vars = vars(row),
+                     .funs = funs(parse_number)) %>%
+    inner_join(sims_newdata_hcw_df %>%
+                   dplyr::select(-n, -age_gp, -payroll)) %>% 
+    spread(row, value) %>%
+    gather(row, value, -sample, -`1`) %>%
+    dplyr::mutate(ratio = value/`1`) %>%
+    group_by(row) %>%
+    dplyr::summarise(estimate = mean(ratio),
+                     `2.5 %` = quantile(ratio, 0.025),
+                     `97.5 %` = quantile(ratio, 0.975)) %>%
+    dplyr::mutate_at(.vars = vars(row),
+                     .funs = funs(parse_number)) 
+
+or_predictor_hcw <- 
+    inner_join(sims_newdata_hcw_df, sims_zelig_table_hcw) %>%
+    dplyr::mutate(
+        age_gp = case_when(
+            age_gp == "2" ~ "25-34",
+            age_gp == "3" ~ "35-44",
+            age_gp == "4" ~ "45-54", 
+            age_gp == "5" ~ "55+"),
+        payroll = case_when(payroll == "2" ~ "Volunteer")) %>%
+    dplyr::mutate(`Odds Ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
+                                         estimate, `2.5 %`, `97.5 %`)) %>%
+    dplyr::mutate(Effect = paste0(age_gp, payroll),
+                  Effect = gsub(pattern = "NA", replacement = "",
+                                x= Effect)) %>%
+    dplyr::select(`As health care worker` = Effect, `Odds Ratio`)
 
 
+# and now for current job
+zelig_dur_job <- zelig(data=hcw.data.forreg,
+                       formula = duration_job ~ age_gp + payroll + 
+                           sex + urban,
+                       model = "gamma")
+
+sims_newdata_job_df <- make_duration_newdata(glm_dur_job_step) %>%
+    dplyr::mutate(row = seq_along(age_gp))
+
+sims_newdata_job <- setx(zelig_dur_job, 
+                         age_gp = sims_newdata_job_df$age_gp,
+                         payroll = sims_newdata_job_df$payroll,
+                         sex = sims_newdata_job_df$sex,
+                         urban = sims_newdata_job_df$urban)
+
+sims_zelig_job <- Zelig::sim(obj = zelig_dur_job,
+                             num = 1000,
+                             x = sims_newdata_job)
+
+sims_zelig_table_job <- sims_zelig_job$sim.out[[1]] %>%
+    map("ev") %>%
+    map_df(~data.frame(value = unlist(.x)) %>%
+               dplyr::mutate(sample = 1:n()),
+           .id = "row") %>%
+    dplyr::mutate_at(.vars = vars(row),
+                     .funs = funs(parse_number)) %>%
+    inner_join(sims_newdata_job_df %>%
+                   dplyr::select(-n, -age_gp,
+                                 -payroll, -sex, -urban)) %>% 
+    spread(row, value) %>%
+    gather(row, value, -sample, -`1`) %>%
+    dplyr::mutate(ratio = value/`1`) %>%
+    group_by(row) %>%
+    dplyr::summarise(estimate = mean(ratio),
+                     `2.5 %` = quantile(ratio, 0.025),
+                     `97.5 %` = quantile(ratio, 0.975)) %>%
+    dplyr::mutate_at(.vars = vars(row),
+                     .funs = funs(parse_number)) 
+
+
+or_predictor_job <- 
+    inner_join(sims_newdata_job_df, sims_zelig_table_job) %>%
+    dplyr::mutate(
+        age_gp = case_when(
+            age_gp == "2" ~ "25-34",
+            age_gp == "3" ~ "35-44",
+            age_gp == "4" ~ "45-54", 
+            age_gp == "5" ~ "55+"),
+        payroll = case_when(payroll == "2" ~ "Volunteer"),
+        sex = if_else(sex == 1, "NA", "Male"),
+        urban = if_else(urban == 1, "NA", "Urban")) %>%
+    dplyr::mutate(`Odds Ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
+                                         estimate, `2.5 %`, `97.5 %`)) %>%
+    dplyr::mutate(Effect = paste0(age_gp, payroll, sex, urban),
+                  Effect = gsub(pattern = "NA", replacement = "",
+                                x= Effect)) %>%
+    dplyr::select(`In current job` = Effect, `Odds Ratio`) 
+
+full_join(or_predictor_hcw,
+          or_predictor_job) %>%
+    write_csv("Figures/Table_4_Odds_Ratios_for_Gamma_Predictions.csv")
