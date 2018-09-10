@@ -8,6 +8,7 @@ library(RColorBrewer)
 library(boot)
 library(magrittr)
 library(broom)
+library(Zelig)
 
 # read in data
 hcw.data <- read_csv("HCWsurvey_limited.csv")
@@ -92,14 +93,16 @@ hcw.data %>%
 # A| FIT DISTRIBUTION
 
 # get distribution parameters and regular 
-hcw.data %>%
+duration_parameters_all <- hcw.data %>%
     dplyr::select(`In current job` = duration_job, 
                   `As health care worker` = duration_hcw) %>%
     tidyr::gather(key, value) %>%
     na.omit %>%
     split(.$key) %>%
     purrr::map(~MASS::fitdistr(.x$value,
-                               densfun = "gamma")) %>%
+                               densfun = "gamma"))
+
+duration_parameters_all %>%
     purrr::map_df(~bind_cols(
         tidy(.x, conf.int = TRUE),
         as.data.frame(confint(.x))),
@@ -115,7 +118,7 @@ hcw.data %>%
 # are there differences between the duration of employment for
 # each different type of worker?
 
-duration_parameters <- 
+duration_parameters_by_prof <- 
     hcw.data %>%
     dplyr::select(`In current job` = duration_job, 
                   `As health care worker` = duration_hcw,
@@ -129,7 +132,7 @@ duration_parameters <-
 # make a plot of each of the shape and rate parameters for
 # the four profession groups for both duration of current job and total career
 
-duration_parameters %>%
+duration_parameters_by_prof %>%
     purrr::map_df(
         ~bind_cols(tidy(.x),
                    as.data.frame(confint(.x))),
@@ -144,14 +147,14 @@ duration_parameters %>%
 
 # end simulation
 
-set.seed(100)
+set.seed(25)
 x_values <- seq(0,
                 ceiling(max(hcw.data$duration_hcw, na.rm=T)),
                 by = 1.25) + 0.5
 
-duration_bounds <- duration_parameters %>%
+duration_bounds_all <- duration_parameters_all %>%
     purrr::map(# sample parameters from MLE estimate
-        ~mvtnorm::rmvnorm(n = 1000,
+        ~mvtnorm::rmvnorm(n = 100,
                           mean = .x$estimate,
                           sigma = .x$vcov)) %>%
     purrr::map_df(
@@ -194,10 +197,10 @@ p_duration <- hcw.data %>%
 
 # add on the uncertainty bounds
 p_duration <- p_duration +
-    geom_ribbon(data = duration_bounds,
+    geom_ribbon(data = duration_bounds_all,
                 aes(x=x, ymin = ymin, ymax = ymax),
                 color=NA, fill="lightskyblue", alpha=0.5) +
-    geom_line(data= distribution_bounds,
+    geom_line(data= duration_bounds,
               aes(x=x, y=y),
               lty=2)
 
@@ -302,7 +305,7 @@ model_output_postprocessor <- function(x){
     # x a tidy data frame output by a model
     
     
-    
+    # replace sex term with more meaningful labels
     if (sum(grepl(pattern = "sex", x = x$term)) > 1){
         x %<>% mutate(Sex = case_when(grepl(pattern = "sex", x = term) ~ "Male",
                                       TRUE ~ "Baseline"),
@@ -313,6 +316,7 @@ model_output_postprocessor <- function(x){
         )
     }
     
+    # tidy up punctuation for other terms
     dplyr::mutate(x,
                   term = gsub(pattern = "(\\(|\\))", 
                               replacement = "",
@@ -340,6 +344,7 @@ model_output_postprocessor <- function(x){
     
 }
 
+# replace the values of the age and sex terms to be human friendly
 mod_parameters <- model_list %>%
     purrr::map(~tidy(.x, conf.int=T)) %>%
     purrr::map_df(~model_output_postprocessor(.x),
@@ -354,6 +359,7 @@ mod_parameters <- model_list %>%
                                     "55+"   = "Age Group 5",
                                     "Male" = "Sex")) 
 
+# make a neat table containing the estimates from the models of duration
 mod_parameters %>%
     dplyr::select(one_of(c("Outcome", "Term", "conf.low", "conf.high", 
                            "Estimate", "Sex"))) %>%
@@ -431,6 +437,67 @@ make_duration_newdata <- function(obj){
 }
 
 
+make_duration_newdata <- function(obj){
+    
+    X_names <- obj$formula %>%
+        as.character %>%
+        .[3] %>%
+        strsplit(
+            x = .,
+            split = " \\+ "
+        ) %>%
+        unlist
+    
+    # extract the unique values of the explanatory variables
+    # then use expand.grid to get all combinations
+    
+    if (any(class(obj) == "glm")) {
+        
+        x <- obj$model %>%
+            dplyr::select(one_of(X_names)) %>%
+            dplyr::distinct(.)  %>%
+            purrr::map(~levels(.x)) %>%
+            expand.grid %>%
+            dplyr::mutate(row = 1:n())
+        
+    } else if (attr(attributes(obj)$class, "package") == "Zelig"){
+        # obj a zelig model
+        
+        x <- obj$data %>%
+            dplyr::select(one_of(X_names)) %>%
+            dplyr::distinct(.)  %>%
+            purrr::map(~levels(.x)) %>%
+            expand.grid %>%
+            dplyr::mutate(row = 1:n())
+        
+    }
+    
+    
+    
+    
+    # how many actual variables are there?
+    n_c <- ncol(x) - 1
+    
+    # drop rows from the data frame when they don't represent
+    # a change from baseline for only one variable, or the
+    # baseline itself
+    #
+    # nb this will break if we have interactions in the model
+    x %>%
+        tidyr::gather(key, value, -row) %>%
+        group_by(row) %>%
+        dplyr::summarise(n = sum(value == 1)) %>%
+        dplyr::filter(n >= n_c - 1) %>%
+        inner_join(x) %>%
+        dplyr::arrange(row) %>%
+        dplyr::select(-row) %>%
+        ungroup %>%
+        dplyr::mutate(row = 1:n()) %>%
+        return
+    
+}
+
+
 ## simulate the durations so that we can take a comparison
 
 ## this requires re-fitting with the Zelig package so that we can simulate from the fitted model
@@ -440,8 +507,7 @@ zelig_dur_hcw <- zelig(data=hcw.data.forreg,
                        model = "gamma")
 
 # make a new data frame containing only the required values for prediction
-sims_newdata_hcw_df <- make_duration_newdata(glm_dur_hcw_step) %>%
-    dplyr::mutate(row = seq_along(age_gp))
+sims_newdata_hcw_df <- make_duration_newdata(zelig_dur_hcw) 
 
 # the setx function makes this a data object that zelig can understand
 sims_newdata_hcw <- setx(zelig_dur_hcw, 
@@ -462,7 +528,7 @@ sims_zelig_table_hcw <- sims_zelig_hcw$sim.out[[1]] %>%
     dplyr::mutate_at(.vars = vars(row),
                      .funs = funs(parse_number)) %>% # ensure index in numeric
     inner_join(sims_newdata_hcw_df %>%
-                   dplyr::select(-n, -age_gp, -payroll)) %>% # combine with data frame
+                   dplyr::select(row)) %>% # combine with data frame
     spread(row, value) %>% # make wide so we have all next to baseline
     gather(row, value, -sample, -`1`) %>% # make baseline | contrast label | contrast value for each sample
     dplyr::mutate(ratio = value/`1`) %>% # calculate ratio of baseline and contrast
@@ -497,8 +563,7 @@ zelig_dur_job <- zelig(data=hcw.data.forreg,
                            sex + urban,
                        model = "gamma")
 
-sims_newdata_job_df <- make_duration_newdata(glm_dur_job_step) %>%
-    dplyr::mutate(row = seq_along(age_gp))
+sims_newdata_job_df <- make_duration_newdata(zelig_dur_job) 
 
 sims_newdata_job <- setx(zelig_dur_job, 
                          age_gp = sims_newdata_job_df$age_gp,
@@ -518,8 +583,7 @@ sims_zelig_table_job <- sims_zelig_job$sim.out[[1]] %>%
     dplyr::mutate_at(.vars = vars(row),
                      .funs = funs(parse_number)) %>%
     inner_join(sims_newdata_job_df %>%
-                   dplyr::select(-n, -age_gp,
-                                 -payroll, -sex, -urban)) %>% 
+                   dplyr::select(row)) %>% 
     spread(row, value) %>%
     gather(row, value, -sample, -`1`) %>%
     dplyr::mutate(ratio = value/`1`) %>%
@@ -551,3 +615,5 @@ or_predictor_job <-
 full_join(or_predictor_hcw,
           or_predictor_job) %>%
     write_csv("Figures/Table_4_Odds_Ratios_for_Gamma_Predictions.csv")
+
+
