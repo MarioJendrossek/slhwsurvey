@@ -112,6 +112,8 @@ hcw.data %>%
     write_csv("Figures\\Table_2.5_Duration_Parameters.csv")
 
 # stratify by type of job
+# are there differences between the duration of employment for
+# each different type of worker?
 
 duration_parameters <- 
     hcw.data %>%
@@ -124,6 +126,8 @@ duration_parameters <-
     purrr::map(~MASS::fitdistr(.x$value,
                                densfun = "gamma"))
 
+# make a plot of each of the shape and rate parameters for
+# the four profession groups for both duration of current job and total career
 
 duration_parameters %>%
     purrr::map_df(
@@ -136,16 +140,18 @@ duration_parameters %>%
                         ymax = `97.5 %`)) +
     facet_grid(Duration ~ term)
 
-# 
+# plot Gamma distribution of durations with uncertainty
 
+# end simulation
+
+set.seed(100)
 x_values <- seq(0,
                 ceiling(max(hcw.data$duration_hcw, na.rm=T)),
                 by = 1.25) + 0.5
 
-# plot Gamma distribution of durations with uncertainty
 duration_bounds <- duration_parameters %>%
     purrr::map(# sample parameters from MLE estimate
-        ~mvtnorm::rmvnorm(n = 100,
+        ~mvtnorm::rmvnorm(n = 1000,
                           mean = .x$estimate,
                           sigma = .x$vcov)) %>%
     purrr::map_df(
@@ -203,11 +209,7 @@ list(`pdf` = "pdf",
                        device = .x,
                        plot = p_duration))
 
-# sam's modelling
-
-
-
-
+# gamma regression models to understand the drivers of duration of employment
 
 # are there any sex-profession interactions?
 interaction <- FALSE
@@ -236,7 +238,8 @@ if (interaction){
 glm_dur_job_step <- MASS::stepAIC(glm_dur_job, trace = FALSE)
 glm_dur_hcw_step <- MASS::stepAIC(glm_dur_hcw, trace = FALSE)
 
-diagnostics <- FALSE
+# do we need regression diagnostics?
+diagnostics <- TRUE
 
 
 make_predictions <- function(object){
@@ -357,8 +360,8 @@ mod_parameters %>%
     dplyr::mutate(CI = sprintf("%0.2f (%0.2f, %0.2f)",
                                Estimate, conf.low, conf.high)) %>%
     dplyr::select(-c(Estimate, conf.low, conf.high)) %>%
+    tidyr::spread(Outcome, CI) %>%
     write_csv("Figures\\Table_4_Duration_Parameters.csv")
-
 
 p_parameters <- ggplot(data=mod_parameters,
                        aes(x=Term, y=Estimate,
@@ -377,18 +380,21 @@ p_parameters <- ggplot(data=mod_parameters,
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-    purrr::map(~ggsave(filename = paste("Figures\\Figure_3_Duration_Parameters",.x, sep="."),
-                       width = 15, height = 7.5, units = "cm",
-                       dpi = 600,
-                       device = .x,
-                       plot = p_parameters))
+    purrr::map(~ggsave(
+        filename =
+            paste("Figures\\Figure_3_Duration_Parameters", .x, sep="."),
+        width = 15, height = 7.5, units = "cm",
+        dpi = 600,
+        device = .x,
+        plot = p_parameters))
 
 # remember that the link function for the gamma family is the inverse
 # i.e. g(mu) = 1/mu
 # so a negative parameter indicates an increase in outcome
 # and a positive parameter indicates a decrease in outcome
 
-# let's make predictions and scale by the baseline to see how the parameters affect what's going on
+# let's make predictions and scale by the baseline to see how the
+# parameters affect what's going on
 
 make_duration_newdata <- function(obj){
     
@@ -425,105 +431,64 @@ make_duration_newdata <- function(obj){
 }
 
 
-
-purrr::map_df(.x = model_list,
-              .f = ~dplyr::bind_cols(
-                  make_duration_newdata(.x), 
-                  predict.glm(.x,
-                              newdata = make_duration_newdata(.x), 
-                              type = "response", 
-                              se.fit = T) %>%
-                      data.frame),
-              .id = "Duration") %>%
-    dplyr::group_by(Duration) %>%
-    # calculate confidence intervals
-    dplyr::mutate(lwr = fit - 1.96*se.fit,
-                  upr = fit + 1.96*se.fit,
-                  base = fit[1]) %>%
-    # scale by baseline
-    dplyr::mutate(fit = fit/base,
-                  lwr = lwr/base,
-                  upr = upr/base) %>%
-    # drop the intercept
-    dplyr::filter(n < max(n)) %>%
-    dplyr::ungroup(.) %>%
-    # combine the estimate and confidence bounds into one cell
-    dplyr::mutate(CI = sprintf("%0.2f (%0.2f, %0.2f)",
-                               fit, lwr, upr)) %>%
-    dplyr::select(-n, -base, -lwr, -upr,
-                  -c(fit, se.fit, residual.scale)) %>%
-    # and now filter out everything that is only 1s
-    gather(variable, value, -Duration, -CI) %>%
-    dplyr::filter(value != 1) %>%
-    # and now relabel so that they're human friendly names
-    dplyr::mutate(Variable = case_when(variable == "sex" ~ "Male",
-                                       variable == "payroll" ~ "Volunteer",
-                                       variable == "urban" ~ "Urban",
-                                       variable == "age_gp" ~ case_when(
-                                           value == "2" ~ "25-34",
-                                           value == "3" ~ "35-44",
-                                           value == "4" ~ "45-54",
-                                           value == "5" ~ "55+"
-                                       ))) %>%
-    # reshape to write as a wide format table
-    dplyr::select(Duration, Variable, CI) %>%
-    dplyr::mutate(Variable = fct_inorder(Variable)) %>%
-    tidyr::spread(Duration, CI) %>% 
-    write_csv(x = ., path = "Figures/Table_4_Odds_Ratio_for_Gamma_Regression.csv")
-
 ## simulate the durations so that we can take a comparison
 
-## this requires fitting with the Zelig package so that we can simulate from the fitted model
+## this requires re-fitting with the Zelig package so that we can simulate from the fitted model
 
 zelig_dur_hcw <- zelig(data=hcw.data.forreg,
                        formula = duration_hcw ~ age_gp + payroll,
                        model = "gamma")
 
+# make a new data frame containing only the required values for prediction
 sims_newdata_hcw_df <- make_duration_newdata(glm_dur_hcw_step) %>%
     dplyr::mutate(row = seq_along(age_gp))
 
+# the setx function makes this a data object that zelig can understand
 sims_newdata_hcw <- setx(zelig_dur_hcw, 
-                     age_gp = sims_newdata_hcw_df$age_gp,
-                     payroll = sims_newdata_hcw_df$payroll)
+                         age_gp = sims_newdata_hcw_df$age_gp,
+                         payroll = sims_newdata_hcw_df$payroll)
 
+# perform the simulation
 sims_zelig_hcw <- Zelig::sim(obj = zelig_dur_hcw,
-                         num = 1000,
-                         x = sims_newdata_hcw)
+                             num = 1000,
+                             x = sims_newdata_hcw)
 
+# we want to compare each set of simulated duration values to the baseline
 sims_zelig_table_hcw <- sims_zelig_hcw$sim.out[[1]] %>%
-    map("ev") %>%
+    map("ev") %>% # extract E(Y|X)
     map_df(~data.frame(value = unlist(.x)) %>%
                dplyr::mutate(sample = 1:n()),
-           .id = "row") %>%
+           .id = "row") %>% # convert to a data frame
     dplyr::mutate_at(.vars = vars(row),
-                     .funs = funs(parse_number)) %>%
+                     .funs = funs(parse_number)) %>% # ensure index in numeric
     inner_join(sims_newdata_hcw_df %>%
-                   dplyr::select(-n, -age_gp, -payroll)) %>% 
-    spread(row, value) %>%
-    gather(row, value, -sample, -`1`) %>%
-    dplyr::mutate(ratio = value/`1`) %>%
+                   dplyr::select(-n, -age_gp, -payroll)) %>% # combine with data frame
+    spread(row, value) %>% # make wide so we have all next to baseline
+    gather(row, value, -sample, -`1`) %>% # make baseline | contrast label | contrast value for each sample
+    dplyr::mutate(ratio = value/`1`) %>% # calculate ratio of baseline and contrast
+    # take quantiles of ratios
     group_by(row) %>%
     dplyr::summarise(estimate = mean(ratio),
                      `2.5 %` = quantile(ratio, 0.025),
-                     `97.5 %` = quantile(ratio, 0.975)) %>%
+                     `97.5 %` = quantile(ratio, 0.975)) %>% 
     dplyr::mutate_at(.vars = vars(row),
                      .funs = funs(parse_number)) 
 
+# make nice for table output
+
 or_predictor_hcw <- 
     inner_join(sims_newdata_hcw_df, sims_zelig_table_hcw) %>%
-    dplyr::mutate(
-        age_gp = case_when(
-            age_gp == "2" ~ "25-34",
-            age_gp == "3" ~ "35-44",
-            age_gp == "4" ~ "45-54", 
-            age_gp == "5" ~ "55+"),
-        payroll = case_when(payroll == "2" ~ "Volunteer")) %>%
+    dplyr::mutate(age_gp = case_when(age_gp == "2" ~ "25-34",
+                                     age_gp == "3" ~ "35-44",
+                                     age_gp == "4" ~ "45-54", 
+                                     age_gp == "5" ~ "55+"),
+                  payroll = case_when(payroll == "2" ~ "Volunteer")) %>%
     dplyr::mutate(`Odds Ratio` = sprintf("%0.2f (%0.2f, %0.2f)",
                                          estimate, `2.5 %`, `97.5 %`)) %>%
     dplyr::mutate(Effect = paste0(age_gp, payroll),
                   Effect = gsub(pattern = "NA", replacement = "",
                                 x= Effect)) %>%
-    dplyr::select(`As health care worker` = Effect, `Odds Ratio`)
+    dplyr::select(Effect, `As health care worker` = `Odds Ratio`)
 
 
 # and now for current job
@@ -569,11 +534,10 @@ sims_zelig_table_job <- sims_zelig_job$sim.out[[1]] %>%
 or_predictor_job <- 
     inner_join(sims_newdata_job_df, sims_zelig_table_job) %>%
     dplyr::mutate(
-        age_gp = case_when(
-            age_gp == "2" ~ "25-34",
-            age_gp == "3" ~ "35-44",
-            age_gp == "4" ~ "45-54", 
-            age_gp == "5" ~ "55+"),
+        age_gp = case_when(age_gp == "2" ~ "25-34",
+                           age_gp == "3" ~ "35-44",
+                           age_gp == "4" ~ "45-54", 
+                           age_gp == "5" ~ "55+"),
         payroll = case_when(payroll == "2" ~ "Volunteer"),
         sex = if_else(sex == 1, "NA", "Male"),
         urban = if_else(urban == 1, "NA", "Urban")) %>%
@@ -582,7 +546,7 @@ or_predictor_job <-
     dplyr::mutate(Effect = paste0(age_gp, payroll, sex, urban),
                   Effect = gsub(pattern = "NA", replacement = "",
                                 x= Effect)) %>%
-    dplyr::select(`In current job` = Effect, `Odds Ratio`) 
+    dplyr::select(Effect, `In current job` = `Odds Ratio`) 
 
 full_join(or_predictor_hcw,
           or_predictor_job) %>%
