@@ -206,8 +206,11 @@ p_duration <- p_duration +
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-    purrr::map(~ggsave(filename = paste("Figures\\Figure_2_duration",.x, sep="."),
-                       width = 15, height = 7.5, units = "cm",
+    purrr::map(~ggsave(filename =
+                           paste("Figures\\Figure_2_duration",.x, sep="."),
+                       width = 15, 
+                       height = 7.5,
+                       units = "cm",
                        dpi = 600,
                        device = .x,
                        plot = p_duration))
