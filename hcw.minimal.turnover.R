@@ -155,7 +155,7 @@ list(`pdf` = "pdf",
     purrr::map(
         ~ggsave(
             filename =
-                paste("Figures\\Figure_3_Effective_immunisation_coverage",
+                paste("Figures\\Figure_3_Duration_of_employment",
                       .x,
                       sep="."),
             width = 15, 
