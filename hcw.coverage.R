@@ -1,5 +1,5 @@
+## COVERAGE SIMULATION 
 
-# C| density function gamma
 set.seed(2018)
 
 HCW_values <- hcw.data %>%

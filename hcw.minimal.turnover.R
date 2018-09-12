@@ -1,63 +1,7 @@
-# script contains the code necessary to replicate the analysis of the paper
+## MODELLING DURATION OF EMPLOYMENT
 
 # Turnover script
 set.seed(91)
-library(conflicted)
-library(tidyverse)
-library(RColorBrewer)
-library(boot)
-library(magrittr)
-library(broom)
-library(Zelig)
-
-# read in data
-hcw.data <- read_csv("HCWsurvey_limited.csv")
-
-# many variables appear to be factors listed as numeric
-# these should be coded as factors
-likely_factor <- function(x){
-    
-    status <- FALSE
-    
-    if (!all(is.integer(x))){return(FALSE)}
-    
-    if (min(x, na.rm = T) == 1){status <- TRUE}
-    
-    return(status)
-    
-}
-
-# urban is stored as 0/1 instead of 1/2
-# convert it and then turn likely factors into actual factors
-# num_hc is a count variable though
-hcw.data %<>% 
-    dplyr::mutate(urban = as.integer(urban + 1)) %>%
-    dplyr::mutate_if(.predicate = likely_factor,
-                     .funs = factor) %>%
-    dplyr::mutate(num_hc = parse_integer(num_hc))
-
-# select which variables we need for the regression
-
-hcw.data.forreg <- hcw.data %>%
-    dplyr::select(
-        # response
-        duration_hcw,
-        duration_job,
-        # explanatory
-        sex,
-        age_gp ,
-        urban,
-        #num_hc, actually on causal pathway
-        prof_gp,
-        #edu_gp, closely related to income and profession
-        income_gp,
-        payroll,
-        ethnic_gp,
-        hc_type_gp,
-        full_time
-    ) %>%
-    na.omit
-
 
 # 1. Duration current job
 
@@ -112,7 +56,7 @@ duration_parameters_all %>%
                   Parameter = case_when(term == "shape" ~ "alpha",
                                         term == "rate" ~ "beta")) %>%
     dplyr::select(Duration, Parameter, `Value (95% CI)` = CI) %>%
-    write_csv("Figures\\Table_2.5_Duration_Parameters.csv")
+    write_csv("Figures\\Duration_parameters_for_Gamma_distribution.csv")
 
 # stratify by type of job
 # are there differences between the duration of employment for
@@ -141,7 +85,9 @@ duration_parameters_by_prof %>%
     ggplot(data=., aes(x = prof_gp, y=estimate)) +
     geom_pointrange(aes(ymin = `2.5 %`,
                         ymax = `97.5 %`)) +
-    facet_grid(Duration ~ term)
+    facet_grid(term ~ Duration) +
+    theme_bw() +
+    xlab("Profession group")
 
 # plot Gamma distribution of durations with uncertainty
 
@@ -200,20 +146,24 @@ p_duration <- p_duration +
     geom_ribbon(data = duration_bounds_all,
                 aes(x=x, ymin = ymin, ymax = ymax),
                 color=NA, fill="lightskyblue", alpha=0.5) +
-    geom_line(data= duration_bounds,
+    geom_line(data= duration_bounds_all,
               aes(x=x, y=y),
               lty=2)
 
 list(`pdf` = "pdf",
      `png` = "png") %>%
-    purrr::map(~ggsave(filename =
-                           paste("Figures\\Figure_2_duration",.x, sep="."),
-                       width = 15, 
-                       height = 7.5,
-                       units = "cm",
-                       dpi = 600,
-                       device = .x,
-                       plot = p_duration))
+    purrr::map(
+        ~ggsave(
+            filename =
+                paste("Figures\\Figure_3_Effective_immunisation_coverage",
+                      .x,
+                      sep="."),
+            width = 15, 
+            height = 7.5,
+            units = "cm",
+            dpi = 600,
+            device = .x,
+            plot = p_duration))
 
 # gamma regression models to understand the drivers of duration of employment
 
@@ -246,7 +196,6 @@ glm_dur_hcw_step <- MASS::stepAIC(glm_dur_hcw, trace = FALSE)
 
 # do we need regression diagnostics?
 diagnostics <- TRUE
-
 
 make_predictions <- function(object){
     object$model %>%
@@ -370,7 +319,7 @@ mod_parameters %>%
                                Estimate, conf.low, conf.high)) %>%
     dplyr::select(-c(Estimate, conf.low, conf.high)) %>%
     tidyr::spread(Outcome, CI) %>%
-    write_csv("Figures\\Table_4_Duration_Parameters.csv")
+    write_csv("Figures\\SI_Table_Duration_model_parameters.csv")
 
 p_parameters <- ggplot(data=mod_parameters,
                        aes(x=Term, y=Estimate,
@@ -391,7 +340,7 @@ list(`pdf` = "pdf",
      `png` = "png") %>%
     purrr::map(~ggsave(
         filename =
-            paste("Figures\\Figure_3_Duration_Parameters", .x, sep="."),
+            paste("Figures\\SI_Figure_Duration_model_parameters", .x, sep="."),
         width = 15, height = 7.5, units = "cm",
         dpi = 600,
         device = .x,
@@ -474,9 +423,6 @@ make_duration_newdata <- function(obj){
             dplyr::mutate(row = 1:n())
         
     }
-    
-    
-    
     
     # how many actual variables are there?
     n_c <- ncol(x) - 1
@@ -617,6 +563,6 @@ or_predictor_job <-
 
 full_join(or_predictor_hcw,
           or_predictor_job) %>%
-    write_csv("Figures/Table_4_Odds_Ratios_for_Gamma_Predictions.csv")
+    write_csv("Figures/Table_3_Odds_Ratios_for_Gamma_Predictions.csv")
 
 
