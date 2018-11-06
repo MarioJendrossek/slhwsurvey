@@ -101,3 +101,45 @@ inner_join(hcw.glm.data.long.intercepts,
                                     .funs = first_only)) %>%
     write_csv("Figures/Table_2_Association_with_vaccination_opinion_for_the_univariate_models.csv")
 
+# potential co-linearities
+
+library(pspearman)
+
+hcw.cor.df <- hcw.data %>%
+    dplyr::select(one_of(sort(hcw.factors))) %>%
+    names %>%
+    expand.grid(x = .,
+                y = .) %>%
+    dplyr::filter(x != y) %>% 
+    dplyr::mutate(x = fct_inorder(x),
+                  y = factor(y, levels = levels(x))) %>%
+    # dplyr::filter(as.numeric(x) > as.numeric(y)) %>%
+    dplyr::mutate(row = 1:n()) %>%
+    dplyr::mutate_at(.funs = as.character, .vars = vars(x,y))
+
+hcw.cor <- hcw.cor.df %>%
+    split(.$row) %>%
+    map(~data.frame(x = hcw.data[, (.x$x)],
+                    y = hcw.data[, (.x$y)])) %>%
+    map(~dplyr::mutate_all(.x, 
+                           .funs = function(x){factor(x, ordered = TRUE)})) %>%
+    map(~pspearman::spearman.test(x = .x[,1],
+                                  y = .x[,2])) %>%
+    map_df(~data.frame(p.value = .x$p.value,
+                       rho = as.numeric(.x$estimate)),
+           .id="row") %>%
+    dplyr::mutate(row = parse_number(row)) %>%
+    inner_join(hcw.cor.df) 
+    
+
+hcw.cor %>%
+    dplyr::mutate(rho_cut = base::cut(rho, c(-1, -0.7, -0.5, -0.2,
+                                             0.2, 0.5, 0.7, 1),
+                                      include.lowest=TRUE)) %>%
+    ggplot(data=., aes(x=x, y=y)) +
+    geom_tile(aes(fill = rho_cut)) +
+    scale_fill_brewer(palette="PuOr") +
+    theme_bw() +
+    coord_equal() +
+    theme(axis.text.x = element_text(angle = 90),
+          panel.grid = element_blank())

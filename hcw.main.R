@@ -4,10 +4,10 @@
 ## MARIO JENDROSSEK and SAM CLIFFORD under ROSALIND EGGO
 
 library(conflicted)
+library(magrittr)
 library(tidyverse)
 library(RColorBrewer)
 library(boot)
-library(magrittr)
 library(broom)
 library(Zelig)
 

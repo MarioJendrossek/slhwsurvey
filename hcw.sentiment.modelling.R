@@ -5,6 +5,8 @@ sentiment <- glm(data = hcw.data.forsent,
                  vacc_pos ~ .,
                  family = binomial())
 
+
+
 # variable selection
 sentiment_step <- MASS::stepAIC(sentiment, 
                                 trace = FALSE)#,
@@ -81,3 +83,114 @@ tidy(sentiment_restricted, conf.int=T) %>%
     write_csv("Figures/Vaccine_acceptance_after_stepwise_selection.csv")
 
 
+## fit a GAM model for reviewer
+
+library(mgcv)
+
+gam.formula <- hcw.data.forsent %>% 
+    dplyr::select(-starts_with("duration"), -vacc_pos) %>%
+    names %>%
+    paste(collapse = " + ") %>%
+    paste("vacc_pos ~ ", ., " + s(duration_hcw) + s(duration_job)")
+
+
+sentiment_gam <- gam(data = hcw.data.forsent,
+                     formula = as.formula(gam.formula),
+                     family = binomial(),
+                     select = TRUE)
+
+anova(sentiment_gam)
+
+sentiment_gam_no_smooth <- 
+    gam(data = hcw.data.forsent,
+        formula = as.formula(
+            paste("vacc_pos ~ ", hcw.data.forsent %>%
+                      dplyr::select( -vacc_pos) %>%
+                      names %>%
+                      paste(collapse = " + "))
+        ),
+        family = binomial(),
+        select = TRUE)
+
+anova(sentiment_gam_no_smooth)
+
+## end fit GAM
+
+## fit interaction models
+
+interaction_vars <- hcw.data.forsent %>% 
+    dplyr::select(-vacc_pos, -payroll) %>%
+    names
+
+names(interaction_vars) <- interaction_vars
+
+interaction_models <- interaction_vars %>%
+    map(~paste0("vacc_pos ~ payroll * ", .x)) %>%
+    map(~gam(data = hcw.data.forsent,
+             formula = as.formula(.x),
+             family = binomial())) 
+
+interaction_AIC <- interaction_models %>%
+    map(~AIC(.x)) %>%
+    map_df(~data.frame(AIC = .x), .id="Variable") %>%
+    bind_rows(data.frame(Variable = "None",
+                         AIC = AIC(sentiment_restricted))) %>%
+    arrange(AIC)
+
+interaction_AIC_max <- interaction_AIC %>%
+    dplyr::filter(AIC == min(AIC)) %>%
+    pull(Variable) 
+
+interaction_models[[interaction_AIC_max]] %>%
+    anova.gam(.)
+
+
+## visualise interaction model
+
+interaction_plot <- 
+    distinct(hcw.data.forsent[ , c("hc_type_gp", "payroll")]) %>%
+    bind_cols(pred = predict(
+        object = interaction_models[[interaction_AIC_max]], 
+        newdata = ., type="link", se.fit=TRUE) %>%
+            as.data.frame %>%
+            dplyr::mutate(L = fit - 1.96*se.fit,
+                          U = fit + 1.96*se.fit)) %>%
+    dplyr::mutate_at(.tbl = .,
+                     .vars = vars(fit, L, U),
+                     .funs = inv.logit) %>%
+    dplyr::mutate(payroll = case_when(payroll == 1 ~ "Payroll",
+                                      payroll == 2 ~ "Volunteer"),
+                  hc_type_gp = case_when(
+                      hc_type_gp == 1 ~ "Government Hospital",
+                      hc_type_gp == 2 ~ "Community Health Centre",
+                      hc_type_gp == 3 ~ "CHP/MCHP",
+                      hc_type_gp == 4 ~ "Private/NGO")) %>%
+    ggplot(data=., aes(x=hc_type_gp, y=fit)) +
+    geom_pointrange(aes(ymin = L, ymax = U, color=payroll),
+                    position = position_dodge(width=0.5))  +
+    coord_flip() +
+    theme_bw() +
+    theme(legend.position="bottom") +
+    xlab("") + ylab("Sentiment") +
+    geom_point(alpha=0.25, size=1,
+               aes(y = vacc_pos,
+                   color=payroll),
+               position=position_jitter(width=0.2,
+                                        height=0.1),
+               data=hcw.data.forsent  %>%
+                   dplyr::mutate(
+                       payroll = case_when(payroll == 1 ~ "Payroll",
+                                           payroll == 2 ~ "Volunteer"),
+                       hc_type_gp = case_when(
+                           hc_type_gp == 1 ~ "Government Hospital",
+                           hc_type_gp == 2 ~ "Community Health Centre",
+                           hc_type_gp == 3 ~ "CHP/MCHP",
+                           hc_type_gp == 4 ~ "Private/NGO"),
+                       aes(color=payroll))) +
+    scale_y_continuous(breaks = seq(0,1,by=0.2)) +
+    scale_color_discrete(name="")
+
+ggsave(filename = "Figures/interaction_plot.pdf", 
+       plot = interaction_plot,
+       width = 15, height = 15, units = "cm",
+       dpi = 600)
