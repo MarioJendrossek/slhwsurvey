@@ -10,7 +10,65 @@ sentiment <- glm(data = hcw.data.forsent,
 # variable selection
 sentiment_step <- MASS::stepAIC(sentiment, 
                                 trace = FALSE)#,
-#k = log(nrow(hcw.data.forsent)))
+
+# a null model
+sentiment_mean <- glm(data = hcw.data.forsent,
+    vacc_pos ~ 1, 
+    family=binomial())
+
+# what are the error rates?
+
+calculate_MAPE <- function(obj){
+    return(mean(abs(obj$y - obj$fitted.values)))
+}
+
+sentiment_models <- 
+    list(Full     = sentiment,
+         Stepwise = sentiment_step,
+         Mean     = sentiment_mean) 
+
+sentiment_models %>%
+    map_df(~data.frame(AIC = AIC(.x),
+                       MAPE = calculate_MAPE(.x)),
+           .id = "Model") %>%
+    mutate_if(.predicate = is.numeric, .funs = round, digits=3) %>%
+    dplyr::arrange(AIC)
+
+sentiment_preds <- sentiment_models %>%
+    map_df(~data.frame(obs =.x$y,
+                       fit = .x$fitted.values), 
+           .id = "Model") %>%
+    group_by(Model) %>%
+    dplyr::mutate(pred = round(fit),
+                  id = 1:n())  %>%
+    ungroup %>%
+    dplyr::mutate(value = case_when(obs == 1 & pred == 1 ~ "TP",
+                                    obs == 0 & pred == 1 ~ "FP",
+                                    obs == 1 & pred == 0 ~ "FN",
+                                    obs == 0 & pred == 0 ~ "TN",
+                                    TRUE ~ "Error")) 
+
+sentiment_preds %>%
+    dplyr::count(Model, value)
+
+# do we identify the same people as being false positives?
+
+sentiment_preds %>%
+    dplyr::select(id, Model, value) %>%
+    split(.$id) %>%
+    map_df(~data.frame(Disagreement = length(unique(.$value))),
+           .id="id") %>%
+    dplyr::filter(Disagreement > 1) %>%
+    dplyr::mutate(id = readr::parse_number(id)) %>%
+    inner_join(sentiment_preds) %>%
+    dplyr::select(id, Model, obs, pred, p=fit, value) %>%
+    split(.$id)
+
+
+    
+
+
+# end error rates
 
 tidy(sentiment_step, conf.int=TRUE) %>%
     model_output_postprocessor
